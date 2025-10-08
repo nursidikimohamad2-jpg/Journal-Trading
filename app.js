@@ -484,6 +484,32 @@ function calcSim(_rnetFromRefresh){
   riskInput?.addEventListener('input', ()=> calcSim());
 })();
 
+/* ===== Apply URL params ke form & preview ===== */
+(function applyURLParams(){
+  if (!window.URLSearchParams || !form) return;
+  const q = new URLSearchParams(location.search);
+
+  const set = (name, conv = v => v) => {
+    if (q.has(name) && form[name] !== undefined) {
+      form[name].value = conv(q.get(name));
+    }
+  };
+
+  set('symbol', v => v || '');
+  set('side', v => (v==='SHORT'?'SHORT':'LONG'));
+  set('setup_date', v => v || '');
+  set('entry_price', v => v || '');
+  set('stop_loss', v => v || '');
+  set('note', v => v || '');
+
+  // perbarui preview bila angka valid
+  const entry = Number(form.entry_price.value);
+  const sl    = Number(form.stop_loss.value);
+  if (Number.isFinite(entry) && Number.isFinite(sl) && form.side.value) {
+    calcPreview(entry, sl, form.side.value);
+  }
+})();
+
 /* =====================================================
    EXPORT HTML (ringkasan + simulasi balance)
    ===================================================== */
@@ -498,229 +524,230 @@ function downloadTextFile(filename, text, mime = 'text/html') {
 }
 function slugify(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'report'; }
 
-/* hitung statistik + sim */
+/* ===== hitung statistik + simulasi ===== */
 function computeStats(trades){
-  let nDone=0, n1=0, n2=0, n3=0;
-  let r1=0, r2=0, r3=0;
-  let rnet = 0;
-  const dates = [];
+  let nDone=0,n1=0,n2=0,n3=0;
+  let r1=0,r2=0,r3=0,rnet=0;
+  const dates=[];
+
+  // counter kategori
+  const counts = { tp1:0, tp2:0, tp3:0, sl:0 };
 
   for(const t of trades){
     if(t.setup_date) dates.push(t.setup_date);
+    const res=t.result||'';
+    const [x1,x2,x3]=rByResult(res);
+    r1+=x1; r2+=x2; r3+=x3;
+    rnet+=netROf(res);
 
-    const res = t.result || '';
-    const [x1,x2,x3] = rByResult(res);
-    r1 += x1; r2 += x2; r3 += x3;
-    rnet += netROf(res);
+    if(res==='TP1') counts.tp1++;
+    else if(res==='TP2') counts.tp2++;
+    else if(res==='TP3') counts.tp3++;
+    else if(res==='SL') counts.sl++;
 
-    const lvl = levelFromResult(res);
-    if(lvl !== null){ nDone++; if(lvl>=1) n1++; if(lvl>=2) n2++; if(lvl>=3) n3++; }
+    const lvl=levelFromResult(res);
+    if(lvl!==null){nDone++;if(lvl>=1)n1++;if(lvl>=2)n2++;if(lvl>=3)n3++;}
   }
 
-  const pct = (x, base) => base>0 ? Math.round(x/base*100) : 0;
-
-  let minDate='', maxDate='';
+  const pct=(x,b)=>b>0?Math.round(x/b*100):0;
+  let minDate='',maxDate='';
   if(dates.length){
-    const arr = dates.slice().sort();
-    minDate = (arr[0]||'').replace('T',' ');
-    maxDate = (arr[arr.length-1]||'').replace('T',' ');
+    const arr=dates.slice().sort();
+    minDate=(arr[0]||'').replace('T',' ');
+    maxDate=(arr[arr.length-1]||'').replace('T',' ');
   }
 
-  // sim section
-  const { base, risk } = getSettings();
-  const oneR = base * (risk/100);
-  const pnl  = oneR * rnet;
-  const eq   = base + pnl;
+  const {base,risk}=getSettings();
+  const oneR=base*(risk/100);
+  const pnl=oneR*rnet;
+  const eq=base+pnl;
 
-  /* ==== additional scenarios ==== */
-  const rTotal = r1 + r2 + r3;
-  const sim1 = { sumR: r1, pnl: oneR * r1, equity: base + oneR * r1 }; // only TP1 (RR 1:1)
-  const sim2 = { sumR: r2, pnl: oneR * r2, equity: base + oneR * r2 }; // only TP2 (RR 1:2)
-  const sim3 = { sumR: r3, pnl: oneR * r3, equity: base + oneR * r3 }; // only TP3 (RR 1:3)
-  const simAll = { sumR: rTotal, pnl: oneR * rTotal, equity: base + oneR * rTotal }; // combined (ΣR = R1+R2+R3)
+  const rTotalComponents=r1+r2+r3; // ΣR komponen
+  const sim1={sumR:r1,pnl:oneR*r1,equity:base+oneR*r1};
+  const sim2={sumR:r2,pnl:oneR*r2,equity:base+oneR*r2};
+  const sim3={sumR:r3,pnl:oneR*r3,equity:base+oneR*r3};
+  const simAll={sumR:rTotalComponents,pnl:oneR*rTotalComponents,equity:base+oneR*rTotalComponents};
 
-  /* ==== streaks & drawdown (based on actual results) ==== */
-  const seq = trades.map(t => netROf(t.result || '')).filter(v => v !== 0);
-  let curW=0, curL=0, maxW=0, maxL=0;
+  const seq=trades.map(t=>netROf(t.result||'')).filter(v=>v!==0);
+  let curW=0,curL=0,maxW=0,maxL=0;
   for(const v of seq){
-    if(v>0){ curW++; if(curW>maxW) maxW=curW; curL=0; }
-    else if(v<0){ curL++; if(curL>maxL) maxL=curL; curW=0; }
-    else { curW=0; curL=0; }
+    if(v>0){curW++;if(curW>maxW)maxW=curW;curL=0;}
+    else if(v<0){curL++;if(curL>maxL)maxL=curL;curW=0;}
+    else{curW=0;curL=0;}
   }
-  let equityWalk = base, peak = base, maxDD = 0, minEq = base, maxEq = base;
-  for(const v of seq){
-    equityWalk += oneR * v;
-    if(equityWalk > peak) peak = equityWalk;
-    const dd = peak - equityWalk;
-    if(dd > maxDD) maxDD = dd;
-    if(equityWalk < minEq) minEq = equityWalk;
-    if(equityWalk > maxEq) maxEq = equityWalk;
-  }
-  const ddPct = peak > 0 ? +(maxDD/peak*100).toFixed(2) : 0;
 
-  /* max consecutive profit (sum of positive streak) */
-  let curProfitR = 0, maxProfitR = 0;
+  let equityWalk=base,peak=base,maxDD=0,minEq=base,maxEq=base;
   for(const v of seq){
-    if(v>0){ curProfitR += v; if(curProfitR>maxProfitR) maxProfitR = curProfitR; }
-    else { curProfitR = 0; }
+    equityWalk+=oneR*v;
+    if(equityWalk>peak)peak=equityWalk;
+    const dd=peak-equityWalk;
+    if(dd>maxDD)maxDD=dd;
+    if(equityWalk<minEq)minEq=equityWalk;
+    if(equityWalk>maxEq)maxEq=equityWalk;
   }
-  const maxConsecProfitUSD = oneR * maxProfitR;
+  const ddPct=peak>0?+(maxDD/peak*100).toFixed(2):0;
+
+  let curProfitR=0,maxProfitR=0;
+  for(const v of seq){
+    if(v>0){curProfitR+=v;if(curProfitR>maxProfitR)maxProfitR=curProfitR;}
+    else{curProfitR=0;}
+  }
+  const maxConsecProfitUSD=oneR*maxProfitR;
+
+  const wins = counts.tp1 + counts.tp2 + counts.tp3;
+  const losses = counts.sl;
 
   return {
     total: trades.length,
-    prob: { tp1: pct(n1,nDone), tp2: pct(n2,nDone), tp3: pct(n3,nDone) },
+    prob: { tp1:pct(n1,nDone), tp2:pct(n2,nDone), tp3:pct(n3,nDone) },
     rsum: { r1, r2, r3 },
-    rsumTotal: rTotal,
-    rnet,
-    range: {min:minDate, max:maxDate},
-    sim:  { base, risk, oneR, pnl, equity: eq, scenarios: { rr1: sim1, rr2: sim2, rr3: sim3, combined: simAll } },
-    streak: { maxConsecWin: maxW, maxConsecLoss: maxL, maxConsecProfitR: maxProfitR, maxConsecProfitUSD },
-    drawdown: { maxAbs: maxDD, maxPct: ddPct, minEquity: minEq, maxEquity: maxEq }
+    rsumTotal: rnet,                          // Total R = net
+    rsumComponentsTotal: rTotalComponents,    // ΣR
+    counts, wins, losses,                     // detail kategori
+    range: {min:minDate,max:maxDate},
+    sim:{base,risk,oneR,pnl,equity:eq,
+      scenarios:{rr1:sim1,rr2:sim2,rr3:sim3,combined:simAll}},
+    streak:{maxConsecWin:maxW,maxConsecLoss:maxL,
+      maxConsecProfitR:maxProfitR,maxConsecProfitUSD},
+    drawdown:{maxAbs:maxDD,maxPct:ddPct,minEquity:minEq,maxEquity:maxEq}
   };
 }
 
-/* template laporan */
-function buildReportHTML({projectName, createdAt, stats}) {
+/* ===== template laporan HTML ===== */
+function buildReportHTML({ projectName, createdAt, stats }) {
   const css = `
-  :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--line:#1e293b;--pos:#10b981;--neg:#f43f5e;--mh:140px}
-  *{box-sizing:border-box} body{margin:0;background:linear-gradient(#0b1220,#0a1020);color:var(--text);font:14px/1.45 system-ui,Inter,Segoe UI,Roboto}
+  :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--pos:#10b981;--neg:#f43f5e}
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(#0b1220,#0a1020);color:var(--text);font:14px/1.45 system-ui,Inter,Segoe UI,Roboto}
   .wrap{max-width:1024px;margin:0 auto;padding:24px}
-  .card{background:rgba(15,23,42,.9);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px}
-  h1{font-size:22px;margin:0 0 8px} .muted{color:var(--muted)}
-  .grid{display:grid;gap:12px} .g-4{grid-template-columns:repeat(4,1fr)}
-  .metric{display:flex;flex-direction:column;gap:4px;height:var(--mh);justify-content:space-between} .big{font-size:22px;font-weight:700}
+  .grid{display:grid;gap:12px}
+  .g-4{grid-template-columns:repeat(4,1fr);align-items:stretch}
+  .card{background:rgba(15,23,42,.9);border:1px solid rgba(255,255,255,.08);border-radius:12px;
+        padding:16px;display:flex;flex-direction:column;justify-content:space-between}
+  .muted{color:var(--muted)} .big{font-size:22px;font-weight:700}
   .row{display:flex;gap:12px;align-items:center}
-  .bar{height:8px;background:#0b1629;border-radius:8px;overflow:hidden}
-  .bar > i{display:block;height:100%;background:linear-gradient(90deg,#0ea5e9,#10b981)}
+  .bar{height:8px;background:#0b7180;border-radius:2px;overflow:hidden;flex:1}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,#0ea5e9,#10b981)}
   .pos{color:var(--pos)} .neg{color:var(--neg)}
   .footer{color:#6b7280;font-size:12px;text-align:right;margin-top:24px}
+  .r-list{display:flex;flex-direction:column;gap:6px;line-height:1.4}
   @media print{body{background:#fff;color:#000}.card{background:#fff;border-color:#ddd}}
   `;
-  const sign = n => n>=0 ? 'pos' : 'neg';
+  const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2});
+  const sign = n => n>=0?'pos':'neg';
 
   return `<!doctype html>
-  <html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <html lang="id"><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Laporan — ${projectName}</title><style>${css}</style></head>
   <body><div class="wrap">
-    <div class="card" style="margin-bottom:12px">
+
+    <div class="card" style="margin-bottom:12px;height:auto">
       <h1>${projectName}</h1>
-      <div class="muted">Dibuat: ${createdAt} • Rentang: ${stats.range.min || '-'} — ${stats.range.max || '-'}</div>
+      <div class="muted">Dibuat: ${createdAt} • Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'}</div>
     </div>
 
+    <!-- Probabilitas -->
     <div class="grid g-4" style="margin-bottom:12px">
-      <div class="card metric"><div class="muted">Jumlah Transaksi</div><div class="big">${stats.total}</div></div>
-      <div class="card metric"><div class="muted">Prob ≥ TP1</div><div class="row"><div class="big">${stats.prob.tp1}%</div><div class="bar" style="flex:1"><i style="width:${stats.prob.tp1}%"></i></div></div></div>
-      <div class="card metric"><div class="muted">Prob ≥ TP2</div><div class="row"><div class="big">${stats.prob.tp2}%</div><div class="bar" style="flex:1"><i style="width:${stats.prob.tp2}%"></i></div></div></div>
-      <div class="card metric"><div class="muted">Prob ≥ TP3</div><div class="row"><div class="big">${stats.prob.tp3}%</div><div class="bar" style="flex:1"><i style="width:${stats.prob.tp3}%"></i></div></div></div>
+      <div class="card"><div class="muted">Jumlah Transaksi</div><div class="big">${stats.total}</div></div>
+      <div class="card"><div class="muted">Prob ≥ TP1</div><div class="row"><div class="big">${stats.prob.tp1}%</div><div class="bar"><i style="width:${stats.prob.tp1}%"></i></div></div></div>
+      <div class="card"><div class="muted">Prob ≥ TP2</div><div class="row"><div class="big">${stats.prob.tp2}%</div><div class="bar"><i style="width:${stats.prob.tp2}%"></i></div></div></div>
+      <div class="card"><div class="muted">Prob ≥ TP3</div><div class="row"><div class="big">${stats.prob.tp3}%</div><div class="bar"><i style="width:${stats.prob.tp3}%"></i></div></div></div>
     </div>
 
-    <div class="grid g-4">
-      <div class="card metric">
-        <div class="muted">Total R Perolehan (ΣR final)</div>
+    <!-- Ringkasan R -->
+    <div class="grid g-4" style="margin-bottom:12px">
+      <div class="card">
+        <div class="muted">Total R (Final / Net)</div>
         <div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div>
-        <div class="muted">ΣR dihitung per trade: SL=−1, TP1=+1, TP2=+2, TP3=+3</div>
       </div>
-      <div class="card metric">
-        <div class="muted">Akumulasi R (bersusun)</div>
-        <div>R1: <b class="pos">${stats.rsum.r1}</b> • R2: <b class="${sign(stats.rsum.r2)}">${stats.rsum.r2}</b> • R3: <b class="${sign(stats.rsum.r3)}">${stats.rsum.r3}</b></div>
+      <div class="card">
+        <div class="muted">ΣR Komponen (R1+R2+R3)</div>
+        <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
       </div>
-
-      
-      
-      <div class="card metric">
+      <div class="card">
+        <div class="muted">Akumulasi R</div>
+        <div class="r-list">
+          <div>R1: <b class="${sign(stats.rsum.r1)}">${stats.rsum.r1}</b></div>
+          <div>R2: <b class="${sign(stats.rsum.r2)}">${stats.rsum.r2}</b></div>
+          <div>R3: <b class="${sign(stats.rsum.r3)}">${stats.rsum.r3}</b></div>
+        </div>
+      </div>
+      <div class="card">
         <div class="muted">Simulasi Balance</div>
         <div>Modal: <b>$${Number(stats.sim.base).toLocaleString('id-ID')}</b></div>
-        <div>Risk / trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmtMoney(stats.sim.oneR)}</b></div>
-      </div>
-
-      
-    <div class="grid g-4">
-      <div class="card metric">
-        <div class="muted">Total R Perolehan (ΣR final)</div>
-        <div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div>
-        <div class="muted">ΣR dihitung per trade: SL=−1, TP1=+1, TP2=+2, TP3=+3</div>
-      </div>
-      <div class="card metric">
-        <div class="muted">Akumulasi R (bersusun)</div>
-        <div>R1: <b class="${sign(stats.rsum.r1)}">${stats.rsum.r1}</b> • R2: <b class="${sign(stats.rsum.r2)}">${stats.rsum.r2}</b> • R3: <b class="${sign(stats.rsum.r3)}">${stats.rsum.r3}</b></div>
-      </div>
-      <div class="card metric">
-        <div class="muted">Simulasi Balance</div>
-        <div><b>Modal:</b> $${Number(stats.sim.base).toLocaleString('id-ID')} • <b>Risk/trade:</b> ${(+stats.sim.risk).toFixed(2)}% • <b>1R:</b> $${fmtMoney(stats.sim.oneR)}</div>
-      </div>
-      <div class="card metric">
-        <div class="muted">Catatan</div>
-        <div>Prob dihitung dari trade yang sudah punya hasil (SL/TP1/TP2/TP3).</div>
+        <div>Risk/trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmt(stats.sim.oneR)}</b></div>
       </div>
     </div>
 
-    <div class="grid g-4">
-      <div class="card metric">
-        <div class="muted">Hanya TP1 (RR 1:1)</div>
-        <div>Equity: <b>$${fmtMoney(stats.sim.scenarios.rr1.equity)}</b></div>
-        <div>P/L: <b class="${sign(stats.sim.scenarios.rr1.pnl)}">$${fmtMoney(stats.sim.scenarios.rr1.pnl)}</b></div>
-        <div>ΣR: <b class="${sign(stats.sim.scenarios.rr1.sumR)}">${stats.sim.scenarios.rr1.sumR}</b></div>
-      </div>
-      <div class="card metric">
-        <div class="muted">Hanya TP2 (RR 1:2)</div>
-        <div>Equity: <b>$${fmtMoney(stats.sim.scenarios.rr2.equity)}</b></div>
-        <div>P/L: <b class="${sign(stats.sim.scenarios.rr2.pnl)}">$${fmtMoney(stats.sim.scenarios.rr2.pnl)}</b></div>
-        <div>ΣR: <b class="${sign(stats.sim.scenarios.rr2.sumR)}">${stats.sim.scenarios.rr2.sumR}</b></div>
-      </div>
-      <div class="card metric">
-        <div class="muted">Hanya TP3 (RR 1:3)</div>
-        <div>Equity: <b>$${fmtMoney(stats.sim.scenarios.rr3.equity)}</b></div>
-        <div>P/L: <b class="${sign(stats.sim.scenarios.rr3.pnl)}">$${fmtMoney(stats.sim.scenarios.rr3.pnl)}</b></div>
-        <div>ΣR: <b class="${sign(stats.sim.scenarios.rr3.sumR)}">${stats.sim.scenarios.rr3.sumR}</b></div>
-      </div>
-      <div class="card metric">
-        <div class="muted">Semua (ΣR R1+R2+R3)</div>
-        <div>Equity: <b>$${fmtMoney(stats.sim.scenarios.combined.equity)}</b></div>
-        <div>P/L: <b class="${sign(stats.sim.scenarios.combined.pnl)}">$${fmtMoney(stats.sim.scenarios.combined.pnl)}</b></div>
-        <div>ΣR: <b class="${sign(stats.sim.scenarios.combined.sumR)}">${stats.sim.scenarios.combined.sumR}</b></div>
-      </div>
+    <!-- Skenario -->
+    <div class="grid g-4" style="margin-bottom:12px">
+      ${['rr1','rr2','rr3','combined'].map(k=>{
+        const label={rr1:'TP1',rr2:'TP2',rr3:'TP3',combined:'Semua R'}[k];
+        const s=stats.sim.scenarios[k];
+        return `<div class="card">
+          <div class="muted">${label}</div>
+          <div>Equity: <b>$${fmt(s.equity)}</b></div>
+          <div>P/L: <b class="${sign(s.pnl)}">$${fmt(s.pnl)}</b></div>
+          <div>ΣR: <b class="${sign(s.sumR)}">${s.sumR}</b></div>
+        </div>`;
+      }).join('')}
     </div>
 
+    <!-- Win/Loss detail + DD -->
     <div class="grid g-4">
-      <div class="card metric">
-        <div class="muted">Win beruntun maks</div>
-        <div class="big">${stats.streak.maxConsecWin}</div>
+      <div class="card">
+        <div class="muted">Win (berdasarkan TP)</div>
+        <div class="r-list">
+          <div>TP1: <b class="pos">${stats.counts.tp1}</b></div>
+          <div>TP2: <b class="pos">${stats.counts.tp2}</b></div>
+          <div>TP3: <b class="pos">${stats.counts.tp3}</b></div>
+          <div>Total Win: <b class="pos">${stats.wins}</b></div>
+          <div class="muted">Win Streak: <b>${stats.streak.maxConsecWin}</b></div>
+        </div>
       </div>
-      <div class="card metric">
-        <div class="muted">Loss beruntun maks</div>
-        <div class="big ${stats.streak.maxConsecLoss>0?'neg':''}">${stats.streak.maxConsecLoss}</div>
+
+      <div class="card">
+        <div class="muted">Loss</div>
+        <div class="r-list">
+          <div>SL: <b class="neg">${stats.counts.sl}</b></div>
+          <div>Total Loss: <b class="neg">${stats.losses}</b></div>
+          <div class="muted">Loss Streak: <b class="${stats.streak.maxConsecLoss>0?'neg':''}">${stats.streak.maxConsecLoss}</b></div>
+        </div>
       </div>
-      <div class="card metric">
-        <div class="muted">Consecutive Profit (maks)</div>
-        <div><b class="pos">$${fmtMoney(stats.streak.maxConsecProfitUSD)}</b></div>
+
+      <div class="card">
+        <div class="muted">Consec. Profit (maks)</div>
+        <div><b class="pos">$${fmt(stats.streak.maxConsecProfitUSD)}</b></div>
         <div><b class="pos">${stats.streak.maxConsecProfitR}R</b></div>
       </div>
-      <div class="card metric">
+      <div class="card">
         <div class="muted">Max Drawdown</div>
-        <div><b class="neg">$${fmtMoney(stats.drawdown.maxAbs)}</b></div>
+        <div><b class="neg">$${fmt(stats.drawdown.maxAbs)}</b></div>
         <div><b class="neg">${stats.drawdown.maxPct}%</b></div>
       </div>
     </div>
-<div class="footer">RR Journal — Export HTML</div>
+
+    <div class="footer">RR Journal — Export HTML</div>
   </div></body></html>`;
 }
 
-/* handler tombol Export HTML */
+/* ===== handler tombol Export HTML ===== */
 exportHtmlBtn?.addEventListener('click', ()=>{
-  const trades = load();
-  const { name:activeName } = getActiveProject();
-  const projectName = activeName || 'Jurnal Aktif';
-  const stats = computeStats(trades);
-  const html = buildReportHTML({
+  const trades=load();
+  const {name:activeName}=getActiveProject();
+  const projectName=activeName||'Jurnal Aktif';
+  const stats=computeStats(trades);
+  const html=buildReportHTML({
     projectName,
-    createdAt: new Date().toLocaleString('id-ID'),
+    createdAt:new Date().toLocaleString('id-ID'),
     stats
   });
-  const fname = `rr-report-${slugify(projectName)}.html`;
-  downloadTextFile(fname, html, 'text/html');
+  const fname=`rr-report-${slugify(projectName)}.html`;
+  downloadTextFile(fname,html,'text/html');
 });
 
 /* ===== init ===== */
 refresh();
 updateActiveProjectUI();
-calcSim(); // ensure sim section is drawn at load
+calcSim();
