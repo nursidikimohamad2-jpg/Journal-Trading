@@ -484,32 +484,6 @@ function calcSim(_rnetFromRefresh){
   riskInput?.addEventListener('input', ()=> calcSim());
 })();
 
-/* ===== Apply URL params ke form & preview ===== */
-(function applyURLParams(){
-  if (!window.URLSearchParams || !form) return;
-  const q = new URLSearchParams(location.search);
-
-  const set = (name, conv = v => v) => {
-    if (q.has(name) && form[name] !== undefined) {
-      form[name].value = conv(q.get(name));
-    }
-  };
-
-  set('symbol', v => v || '');
-  set('side', v => (v==='SHORT'?'SHORT':'LONG'));
-  set('setup_date', v => v || '');
-  set('entry_price', v => v || '');
-  set('stop_loss', v => v || '');
-  set('note', v => v || '');
-
-  // perbarui preview bila angka valid
-  const entry = Number(form.entry_price.value);
-  const sl    = Number(form.stop_loss.value);
-  if (Number.isFinite(entry) && Number.isFinite(sl) && form.side.value) {
-    calcPreview(entry, sl, form.side.value);
-  }
-})();
-
 /* =====================================================
    EXPORT HTML (ringkasan + simulasi balance)
    ===================================================== */
@@ -633,7 +607,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
   .r-list{display:flex;flex-direction:column;gap:6px;line-height:1.4}
   @media print{body{background:#fff;color:#000}.card{background:#fff;border-color:#ddd}}
   `;
-  const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2});
+  const fmtMoney = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2});
   const sign = n => n>=0?'pos':'neg';
 
   return `<!doctype html>
@@ -676,7 +650,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card">
         <div class="muted">Simulasi Balance</div>
         <div>Modal: <b>$${Number(stats.sim.base).toLocaleString('id-ID')}</b></div>
-        <div>Risk/trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmt(stats.sim.oneR)}</b></div>
+        <div>Risk/trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmtMoney(stats.sim.oneR)}</b></div>
       </div>
     </div>
 
@@ -687,8 +661,8 @@ function buildReportHTML({ projectName, createdAt, stats }) {
         const s=stats.sim.scenarios[k];
         return `<div class="card">
           <div class="muted">${label}</div>
-          <div>Equity: <b>$${fmt(s.equity)}</b></div>
-          <div>P/L: <b class="${sign(s.pnl)}">$${fmt(s.pnl)}</b></div>
+          <div>Equity: <b>$${fmtMoney(s.equity)}</b></div>
+          <div>P/L: <b class="${sign(s.pnl)}">$${fmtMoney(s.pnl)}</b></div>
           <div>ΣR: <b class="${sign(s.sumR)}">${s.sumR}</b></div>
         </div>`;
       }).join('')}
@@ -718,12 +692,12 @@ function buildReportHTML({ projectName, createdAt, stats }) {
 
       <div class="card">
         <div class="muted">Consec. Profit (maks)</div>
-        <div><b class="pos">$${fmt(stats.streak.maxConsecProfitUSD)}</b></div>
+        <div><b class="pos">$${fmtMoney(stats.streak.maxConsecProfitUSD)}</b></div>
         <div><b class="pos">${stats.streak.maxConsecProfitR}R</b></div>
       </div>
       <div class="card">
         <div class="muted">Max Drawdown</div>
-        <div><b class="neg">$${fmt(stats.drawdown.maxAbs)}</b></div>
+        <div><b class="neg">$${fmtMoney(stats.drawdown.maxAbs)}</b></div>
         <div><b class="neg">${stats.drawdown.maxPct}%</b></div>
       </div>
     </div>
