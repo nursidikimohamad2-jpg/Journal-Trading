@@ -1265,75 +1265,16 @@ function injectUrlBarUnder(areaEl, kind){
   input.addEventListener('focus', ()=>{ lastImgKind = kind; });
 }
 
-function injectUrlBarUnder(areaEl, kind){
-  if(!areaEl) return;
-  const id = kind==='before' ? 'editImgBeforeUrl' : 'editImgAfterUrl';
-  if (document.getElementById(id)) return; // sudah ada
-
-  // coba "mencuri" class dari input lain supaya 100% konsisten
-  const mimicClass =
-    (form?.entry_price?.className || editForm?.entry_price?.className) ||
-    // fallback kalau tidak ketemu:
-    'w-full rounded-xl px-3 py-2 text-sm ' +
-    'bg-slate-100 text-slate-900 placeholder-slate-500 border border-slate-300 ' +
-    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ' +
-    'dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500 dark:border-slate-700';
-
-  const wrap = document.createElement('div');
-  wrap.className = 'mt-2 flex gap-2 items-center';
-
-  wrap.innerHTML = `
-    <input id="${id}" type="url"
-      placeholder="Tempel link gambar (https://… atau data:image/…)"
-      class="${mimicClass}" />
-    <button type="button"
-      class="shrink-0 h-[42px] px-4 rounded-xl text-sm font-medium
-             bg-blue-600 text-white hover:bg-blue-500
-             focus:outline-none focus:ring-2 focus:ring-blue-500">
-      Muat
-    </button>
-  `;
-  areaEl.insertAdjacentElement('afterend', wrap);
-
-  const input = wrap.querySelector('input');
-  const btn   = wrap.querySelector('button');
-
-  const loader = async () => {
-    const url = (input.value||'').trim();
-    if (!isLikelyImageURL(url)) {
-      alert('Link tidak valid. Masukkan URL file gambar (akhiran .png/.jpg/.webp) atau data:image/…');
-      input.focus();
-      return;
-    }
-    const b64 = await urlToBase64Smart(url);
-    if (b64) setImagePreview(kind, b64);
-  };
-
-  input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); loader(); }});
-  btn.addEventListener('click', loader);
-
-  // biar paste global masuk ke target ini kalau sedang fokus
-  input.addEventListener('focus', ()=>{ lastImgKind = kind; });
-
-  // samakan tinggi dengan input lain (kalau input acuan punya tinggi tertentu)
-  const ref = form?.entry_price || editForm?.entry_price;
-  if (ref) {
-    const h = getComputedStyle(ref).height;
-    if (h && h !== 'auto') input.style.height = h;
-  }
-}
-
-
 // inject URL bar bila ada drop zone
 injectUrlBarUnder(dropBefore, 'before');
 injectUrlBarUnder(dropAfter,  'after');
 
-  // 2️⃣ Jika yang ditempel adalah teks URL gambar
-  const t = dt.getData?.('text') || '';
-  if (isLikelyImageURL(t)) {
+// Global paste: jika ada URL gambar di clipboard, muat ke area terakhir yang aktif
+window.addEventListener('paste', async (e)=>{
+  const t = (e.clipboardData || window.clipboardData)?.getData?.('text') || '';
+  if (isLikelyImageURL(t)){
     const b64 = await urlToBase64Smart(t.trim());
     if (b64) setImagePreview(lastImgKind, b64);
-    e.preventDefault();
   }
 });
 
