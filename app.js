@@ -1,5 +1,5 @@
 /* =========================
-   RR JOURNAL — APP.JS (UTUH + Export Presentasi + Gambar)
+   RR JOURNAL — APP.JS (UTUH + Presentasi + Gambar + Fix Dupe Buttons)
    ========================= */
 
 /* ===== util DOM ===== */
@@ -37,7 +37,7 @@ const confirmSaveProject = $('#confirmSaveProject');
 /* ===== Edit Modal + Gambar ===== */
 const editModal = $('#editModal'), editForm = $('#editForm'), editCancel = $('#editCancel');
 
-// upload controls (already exist in HTML)
+// upload controls
 const editImgBefore = $('#editImgBefore');
 const editImgBeforeData = $('#editImgBeforeData');
 const editImgBeforePreview = $('#editImgBeforePreview');
@@ -92,7 +92,6 @@ const SYMBOLS = [
   "XAUUSD","XAGUSD","US100"
 ];
 
-/* Ganti input symbol → <select> pada form utama (tanpa edit index.html) */
 function ensureSymbolDropdownForAdd(){
   if (!form) return;
   const old = form.querySelector('[name="symbol"]');
@@ -114,8 +113,6 @@ function ensureSymbolDropdownForAdd(){
 
   old.replaceWith(sel);
 }
-
-/* Ganti input symbol → <select> pada modal edit */
 function ensureSymbolDropdownForEdit(){
   if (!editForm) return;
   const old = editForm.querySelector('[name="symbol"]');
@@ -136,7 +133,6 @@ function ensureSymbolDropdownForEdit(){
 
   old.replaceWith(sel);
 }
-
 function populateSelectOptions(selectEl, list){
   selectEl.innerHTML = '';
   const ph = document.createElement('option');
@@ -166,48 +162,6 @@ function precisionForSymbol(symRaw){
 function stepForPrecision(p){ return Number(`1e-${p}`); }
 function roundTo(n, prec){ const f = Math.pow(10, prec); return Math.round(Number(n||0)*f)/f; }
 function toFixedBy(n, prec){ return Number.isFinite(n) ? Number(n).toFixed(prec) : (0).toFixed(prec); }
-
-/* Terapkan step & placeholder sesuai simbol — FORM TAMBAH */
-function applyPriceFormatToAddForm(){
-  if(!form) return;
-  const p = precisionForSymbol(form.symbol.value);
-  const step = stepForPrecision(p);
-  const ph = p>0 ? ('0.' + '0'.repeat(p)) : '0';
-  if(form.entry_price){ form.entry_price.step = step; form.entry_price.placeholder = ph; }
-  if(form.stop_loss){   form.stop_loss.step   = step; form.stop_loss.placeholder   = ph; }
-  calcPreview(Number(form.entry_price.value), Number(form.stop_loss.value), form.side.value, p);
-}
-/* Terapkan step & placeholder — MODAL EDIT */
-function applyPriceFormatToEditForm(){
-  if(!editForm) return;
-  const p = precisionForSymbol(editForm.symbol.value);
-  const step = stepForPrecision(p);
-  const ph = p>0 ? ('0.' + '0'.repeat(p)) : '0';
-  if(editForm.entry_price){ editForm.entry_price.step = step; editForm.entry_price.placeholder = ph; }
-  if(editForm.stop_loss){   editForm.stop_loss.step   = step; editForm.stop_loss.placeholder   = ph; }
-}
-
-/* ===== Active Project Helpers ===== */
-function setActiveProject(id='', name=''){
-  localStorage.setItem(ACTIVE_ID_KEY, id || '');
-  localStorage.setItem(ACTIVE_NAME_KEY, name || '');
-  updateActiveProjectUI();
-}
-function getActiveProject(){
-  return {
-    id:   localStorage.getItem(ACTIVE_ID_KEY)   || '',
-    name: localStorage.getItem(ACTIVE_NAME_KEY) || ''
-  };
-}
-function updateActiveProjectUI(){
-  const { id, name } = getActiveProject();
-  if (id) {
-    saveToActiveBtn?.classList.remove('hidden');
-    if (saveToActiveBtn) saveToActiveBtn.textContent = `Simpan (${name})`;
-  } else {
-    saveToActiveBtn?.classList.add('hidden');
-  }
-}
 
 /* ===== PREVIEW (mengikuti presisi simbol) ===== */
 function calcPreview(entry, sl, side, _precFromSymbol){
@@ -253,6 +207,25 @@ function netROf(res){
 function rCell(n){
   const c = n>0 ? 'text-emerald-400' : (n<0 ? 'text-rose-400' : 'text-slate-400');
   return `<span class="${c}">${String(n)}</span>`;
+}
+
+/* ===== Active Project Helpers ===== */
+function setActiveProject(id='', name=''){
+  localStorage.setItem(ACTIVE_ID_KEY, id || '');
+  localStorage.setItem(ACTIVE_NAME_KEY, name || '');
+  updateActiveProjectUI();
+}
+function getActiveProject(){
+  return { id: localStorage.getItem(ACTIVE_ID_KEY) || '', name: localStorage.getItem(ACTIVE_NAME_KEY) || '' };
+}
+function updateActiveProjectUI(){
+  const { id, name } = getActiveProject();
+  if (id) {
+    saveToActiveBtn?.classList.remove('hidden');
+    if (saveToActiveBtn) saveToActiveBtn.textContent = `Simpan (${name})`;
+  } else {
+    saveToActiveBtn?.classList.add('hidden');
+  }
 }
 
 /* ===== table row ===== */
@@ -321,7 +294,7 @@ function refresh(){
   const pct = x => (nDone>0?Math.round(x/nDone*100):0)+'%';
   pBox1.textContent = pct(n1); pBox2.textContent = pct(n2); pBox3.textContent = pct(n3);
 
-  calcSim(rnet); // update simulasi balance
+  calcSim(rnet);
 }
 
 /* ===== CRUD data ===== */
@@ -334,7 +307,6 @@ function openEdit(id){
   const t = load().find(x=>x.id===id); if(!t) return;
   ensureSymbolDropdownForEdit();
 
-  // isi form
   editForm.id.value = id;
   editForm.setup_date.value = toDTInput(t.setup_date || '');
   editForm.symbol.value = normalizeSymbol(t.symbol || '');
@@ -342,7 +314,6 @@ function openEdit(id){
   editForm.entry_price.value = t.entry_price ?? 0;
   editForm.stop_loss.value  = t.stop_loss  ?? 0;
 
-  // gambar (base64)
   setImagePreview('before', t.img_before_data || '');
   setImagePreview('after',  t.img_after_data  || '');
 
@@ -391,14 +362,9 @@ function openSaveProjectModal(){
 function closeSaveProjectModal(){ saveProjectModal.classList.add('hidden'); saveProjectModal.classList.remove('flex'); }
 
 /* ===== events: ADD FORM ===== */
-form?.addEventListener('input', ()=>{
-  applyPriceFormatToAddForm();
-});
-form?.addEventListener('change', e=>{
-  if (e.target && e.target.name === 'symbol') applyPriceFormatToAddForm();
-});
+form?.addEventListener('input', ()=> applyPriceFormatToAddForm());
+form?.addEventListener('change', e=>{ if (e.target && e.target.name === 'symbol') applyPriceFormatToAddForm(); });
 
-/* validasi + tambah row  (TIDAK reset modal/risk) */
 form?.addEventListener('submit', e=>{
   e.preventDefault();
   const keepSettings = getSettings();
@@ -427,7 +393,6 @@ form?.addEventListener('submit', e=>{
     setup_date: form.setup_date.value || '',
     note: form.note.value || '',
     result: '',
-    // field lampiran default
     img_before_data: '',
     img_after_data: ''
   });
@@ -439,7 +404,6 @@ form?.addEventListener('submit', e=>{
   refresh();
 });
 
-/* tombol reset form -> jangan hapus modal/risk */
 form?.addEventListener('reset', ()=>{
   const s = loadSettings();
   setTimeout(()=>{ setSettings(s); calcSim(); }, 0);
@@ -459,9 +423,7 @@ tradeList.addEventListener('click', e=>{
 
 editCancel?.addEventListener('click', closeEdit);
 editForm?.symbol?.addEventListener('input', applyPriceFormatToEditForm);
-editForm?.addEventListener('change', e=>{
-  if (e.target && (e.target.name === 'symbol')) applyPriceFormatToEditForm();
-});
+editForm?.addEventListener('change', e=>{ if (e.target && (e.target.name === 'symbol')) applyPriceFormatToEditForm(); });
 editForm?.addEventListener('submit', e=>{
   e.preventDefault();
 
@@ -474,7 +436,6 @@ editForm?.addEventListener('submit', e=>{
     side: editForm.side.value,
     entry_price: roundTo(Number(editForm.entry_price.value)||0, prec),
     stop_loss:   roundTo(Number(editForm.stop_loss.value)||0,  prec),
-    // simpan lampiran base64 yang tertampung di hidden input
     img_before_data: (editImgBeforeData?.value || ''),
     img_after_data:  (editImgAfterData?.value || '')
   });
@@ -489,8 +450,7 @@ document.addEventListener('keydown', e=>{
 exportBtn?.addEventListener('click', ()=>{
   const blob = new Blob([JSON.stringify(load(), null, 2)], {type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='rr-journal.json';
-  document.body.appendChild(a);
-  a.click();
+  document.body.appendChild(a); a.click();
   setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(a.href); },0);
 });
 importInput?.addEventListener('change', async e=>{
@@ -511,17 +471,10 @@ cancelSaveProject?.addEventListener('click', closeSaveProjectModal);
 
 confirmSaveProject?.addEventListener('click', ()=>{
   const trades = load();
-  if (!trades.length) {
-    alert('Belum ada data jurnal untuk disimpan.');
-    return;
-  }
+  if (!trades.length) { alert('Belum ada data jurnal untuk disimpan.'); return; }
 
   const name = (saveProjectName.value||'').trim();
-  if (!name) {
-    alert('Nama Project wajib diisi.');
-    saveProjectName.focus();
-    return;
-  }
+  if (!name) { alert('Nama Project wajib diisi.'); saveProjectName.focus(); return; }
 
   const notes = (saveProjectNotes.value||'').trim();
   const projects = loadProj();
@@ -549,10 +502,9 @@ confirmSaveProject?.addEventListener('click', ()=>{
     setActiveProject(newItem.id, newItem.name);
   }
 
-  save([]);       // kosongkan jurnal aktif
-  refresh();
+  save([]); refresh();
   closeSaveProjectModal();
-  openProjects(); // tampilkan daftar setelah simpan
+  openProjects();
 });
 
 /* buka/tutup modal projects */
@@ -580,10 +532,7 @@ projectsList?.addEventListener('click', e=>{
 
 /* ===== Simulasi Balance ===== */
 function getSettings(){
-  return {
-    base: parseFloat(baseInput?.value) || 0,
-    risk: parseFloat(riskInput?.value) || 0
-  };
+  return { base: parseFloat(baseInput?.value) || 0, risk: parseFloat(riskInput?.value) || 0 };
 }
 function setSettings({base=0, risk=0}={}){
   if(baseInput) baseInput.value = (base ?? '');
@@ -591,8 +540,7 @@ function setSettings({base=0, risk=0}={}){
   saveSettings({base, risk});
 }
 function currentOneR(){
-  const s = getSettings();
-  return s.base * (s.risk/100);
+  const s = getSettings(); return s.base * (s.risk/100);
 }
 function calcSim(){
   const s = getSettings();
@@ -619,12 +567,7 @@ function calcSim(){
 (function applyURLParams(){
   if (!window.URLSearchParams || !form) return;
   const q = new URLSearchParams(location.search);
-
-  const set = (name, conv = v => v) => {
-    if (q.has(name) && form[name] !== undefined) {
-      form[name].value = conv(q.get(name));
-    }
-  };
+  const set = (name, conv = v => v) => { if (q.has(name) && form[name] !== undefined) form[name].value = conv(q.get(name)); };
 
   set('symbol', v => v || '');
   set('side', v => (v==='SHORT'?'SHORT':'LONG'));
@@ -660,7 +603,7 @@ function downloadTextFile(filename, text, mime = 'text/html') {
   }
 }
 
-/* ===== hitung statistik + simulasi (dipakai kedua export) ===== */
+/* ===== hitung statistik + simulasi ===== */
 function computeStats(trades){
   let nDone=0,n1=0,n2=0,n3=0;
   let r1=0,r2=0,r3=0,rnet=0;
@@ -758,7 +701,7 @@ function computeStats(trades){
   };
 }
 
-/* ===== template laporan HTML lama (tetap ada) ===== */
+/* ===== template laporan HTML lama ===== */
 function buildReportHTML({ projectName, createdAt, stats }) {
   const css = `
   :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--pos:#10b981;--neg:#f43f5e}
@@ -822,19 +765,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
         <div>Modal: <b>$${Number(stats.sim.base).toLocaleString('id-ID')}</b></div>
         <div>Risk/trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmt(stats.sim.oneR)}</b></div>
       </div>
-    </div>
-
-    <div class="grid g-4" style="margin-bottom:12px">
-      ${['rr1','rr2','rr3','combined'].map(k=>{
-        const label={rr1:'TP1',rr2:'TP2',rr3:'TP3',combined:'Semua R'}[k];
-        const s=stats.sim.scenarios[k];
-        return `<div class="card">
-          <div class="muted">${label}</div>
-          <div>Equity: <b>$${fmt(s.equity)}</b></div>
-          <div>P/L: <b class="${sign(s.pnl)}">$${fmt(s.pnl)}</b></div>
-          <div>ΣR: <b class="${sign(s.sumR)}">${s.sumR}</b></div>
-        </div>`;
-      }).join('')}
     </div>
 
     <div class="grid g-4">
@@ -905,34 +835,29 @@ exportHtmlBtn?.addEventListener('click', () => {
    EXPORT PRESENTASI (baru) — dengan gambar & card per trade
    ===================================================== */
 
-(function injectExportPresentasiButton(){
-  if (!exportHtmlBtn) return;
+(function injectExportButtons(){
+  // bersihkan duplikat "Export HTML" yang bukan ID resmi
+  [...document.querySelectorAll('button')]
+    .filter(b => b.textContent.trim() === 'Export HTML' && b.id !== 'exportHtmlBtn')
+    .forEach(b => b.remove());
 
-  // 1) Kalau sudah ada tombol resmi kita, hapus dulu (supaya tidak dobel
-  //    jika file JS ter-load 2x karena cache/bundle)
+  // bersihkan duplikat "Export Presentasi" lama
   const old = document.querySelector('#exportPresentBtn');
   if (old) old.remove();
-
-  // 2) Hapus tombol "kembar" lain yang kebetulan teksnya sama tapi bukan milik kita
-  //    (misal ada tombol manual di HTML). Aman karena kita sisakan hanya yang ber-ID.
   [...document.querySelectorAll('button')]
     .filter(b => b.textContent.trim() === 'Export Presentasi' && b.id !== 'exportPresentBtn')
     .forEach(b => b.remove());
 
-  // 3) Buat tombol resmi
+  if (!exportHtmlBtn) return;
+
   const btn = document.createElement('button');
   btn.id = 'exportPresentBtn';
   btn.type = 'button';
   btn.className = 'bg-slate-900/70 ring-1 ring-white/10 px-3 py-1 rounded-lg';
   btn.textContent = 'Export Presentasi';
-
-  // sisipkan tepat setelah "Export HTML"
   exportHtmlBtn.insertAdjacentElement('afterend', btn);
-
-  // 4) Pasang handler
   btn.addEventListener('click', exportPresentationHTML);
 })();
-
 
 function exportPresentationHTML(){
   try {
@@ -958,7 +883,7 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
   .wrap{max-width:1180px;margin:0 auto;padding:28px}
   h1{font-size:28px;margin:0 0 4px}
   .muted{color:var(--muted)}
-  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:16px 0 22px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0 22px}
   .card{background:rgba(15,23,42,.88);border:1px solid var(--ring);border-radius:12px;padding:14px;min-height:72px;display:flex;flex-direction:column;gap:6px}
   .k{font-size:12px;color:var(--muted)} .v{font-size:18px;font-weight:700}
   .pos{color:var(--pos)} .neg{color:var(--neg)}
@@ -984,7 +909,7 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
   .grow{flex:1}
   .right{text-align:right}
   .sep{height:1px;background:var(--ring);margin:10px 0}
-  @media (max-width:900px){ .row{grid-template-columns:1fr} .cards{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:900px){ .row{grid-template-columns:1fr} }
   @media print{ body{background:#fff;color:#000} .card,.block,.thumb,.eval{background:#fff;border-color:#ddd} }
   `;
   const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1002,7 +927,7 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
     <div class="cards">
       <div class="card"><div class="k">Transaksi</div><div class="v">${fmt0(stats.total)}</div></div>
       <div class="card"><div class="k">Win / Loss</div><div class="v">${fmt0(win)} / ${fmt0(loss)}</div></div>
-      <div class="card"><div class="k">Total R (Net)</div><div class="v ${signClass(stats.rsumTotal)}">${stats.rsumTotal}</div></div>
+      <div class="card"><div class="k">Total R (Σ R1+R2+R3)</div><div class="v ${signClass(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div></div>
       <div class="card"><div class="k">1R (USD)</div><div class="v">$${fmt(stats.sim.oneR)}</div></div>
       <div class="card"><div class="k">P/L (USD)</div><div class="v ${signClass(stats.sim.pnl)}">$${fmt(stats.sim.pnl)}</div></div>
     </div>
@@ -1049,11 +974,19 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
 
         <div class="row">
           <div>
-            <div class="thumb">${imgBefore ? `<img src="${imgBefore}" alt="Sebelum">` : `<svg width="100%" height="100%" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"><path d="M20,90 L140,130 L280,60 L420,170 L580,110" fill="none" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"/></svg>`}</div>
+            <div class="thumb">${
+              imgBefore
+                ? `<a href="${imgBefore}" target="_blank" rel="noopener"><img src="${imgBefore}" alt="Sebelum"></a>`
+                : `<svg width="100%" height="100%" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"><path d="M20,90 L140,130 L280,60 L420,170 L580,110" fill="none" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"/></svg>`
+            }</div>
             <div class="cap">Sebelum — (placeholder/chart atau gambar sebelum)</div>
           </div>
           <div>
-            <div class="thumb">${imgAfter ? `<img src="${imgAfter}" alt="Sesudah">` : `<svg width="100%" height="100%" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"><path d="M20,140 L210,150 L360,160 L580,110" fill="none" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"/></svg>`}</div>
+            <div class="thumb">${
+              imgAfter
+                ? `<a href="${imgAfter}" target="_blank" rel="noopener"><img src="${imgAfter}" alt="Sesudah"></a>`
+                : `<svg width="100%" height="100%" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"><path d="M20,140 L210,150 L360,160 L580,110" fill="none" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"/></svg>`
+            }</div>
             <div class="cap">Sesudah — (placeholder/chart atau gambar sesudah)</div>
           </div>
         </div>
@@ -1092,7 +1025,7 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
    Gambar: preview, drag & drop, lightbox
    ===================================================== */
 
-const MAX_IMG_BYTES = 3 * 1024 * 1024; // ~3MB aman untuk localStorage, saranku <300KB ideal
+const MAX_IMG_BYTES = 3 * 1024 * 1024; // ~3MB
 
 async function fileToBase64(file){
   if (!file) return '';
