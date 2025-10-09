@@ -1089,10 +1089,51 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
 }
 
 /* =====================================================
-   Gambar: preview, drag & drop, lightbox
+   Gambar: preview, drag & drop, lightbox + (BARU) PASTE / URL LINK
    ===================================================== */
 
-const MAX_IMG_BYTES = 3 * 1024 * 1024; // ~3MB aman untuk localStorage, saranku <300KB ideal
+const MAX_IMG_BYTES = 3 * 1024 * 1024; // ~3MB aman untuk localStorage
+let lastImgKind = 'before'; // target default untuk paste URL
+
+function isLikelyImageURL(t){
+  try{
+    if(!t) return false;
+    if(t.startsWith('data:image/')) return true;
+    const u = new URL(t);
+    return ['http:','https:'].includes(u.protocol) && /\.(png|jpe?g|webp|gif|bmp|svg)(\?.*)?$/i.test(u.pathname);
+  }catch{ return false; }
+}
+
+async function blobToDataURL(blob){
+  return await new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
+  });
+}
+
+async function fetchToDataURL(url){
+  try{
+    const res = await fetch(url, { mode:'cors' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const blob = await res.blob();
+    if (blob.size > MAX_IMG_BYTES){
+      alert('Ukuran gambar dari URL terlalu besar (> ~3MB). Gunakan gambar yang lebih kecil.');
+      return '';
+    }
+    return await blobToDataURL(blob);
+  }catch(err){
+    console.error('Gagal fetch URL gambar:', err);
+    alert('Tidak bisa memuat link gambar (mungkin CORS diproteksi atau link tidak valid).');
+    return '';
+  }
+}
+
+async function urlToBase64Smart(url){
+  if(url.startsWith('data:image/')) return url; // sudah base64
+  return await fetchToDataURL(url);
+}
 
 async function fileToBase64(file){
   if (!file) return '';
@@ -1150,14 +1191,24 @@ async function handlePickFile(inputEl, kind){
 
 function setupDragDrop(areaEl, inputEl, kind){
   if (!areaEl || !inputEl) return;
-  ['dragenter','dragover'].forEach(ev=> areaEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); areaEl.classList.add('drop-active'); }));
+  ['dragenter','dragover'].forEach(ev=> areaEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); areaEl.classList.add('drop-active'); lastImgKind = kind; }));
   ['dragleave','dragend','drop'].forEach(ev=> areaEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); areaEl.classList.remove('drop-active'); }));
   areaEl.addEventListener('drop', async e=>{
-    const file = e.dataTransfer?.files?.[0]; if (!file) return;
-    const b64 = await fileToBase64(file);
-    if (b64) setImagePreview(kind, b64);
+    const dt = e.dataTransfer; if(!dt) return;
+    const file = dt.files?.[0];
+    if(file){
+      const b64 = await fileToBase64(file);
+      if (b64) setImagePreview(kind, b64);
+      return;
+    }
+    // Text/URL drop
+    const t = dt.getData('text');
+    if(isLikelyImageURL(t)){
+      const b64 = await urlToBase64Smart(t.trim());
+      if (b64) setImagePreview(kind, b64);
+    }
   });
-  areaEl.addEventListener('click', ()=> inputEl.click());
+  areaEl.addEventListener('click', ()=> { lastImgKind = kind; inputEl.click(); });
 }
 
 /* lightbox */
@@ -1171,8 +1222,8 @@ function closeLightbox(){
   imgViewerImg.src = '';
 }
 
-editImgBefore?.addEventListener('change', ()=> handlePickFile(editImgBefore,'before'));
-editImgAfter?.addEventListener('change',  ()=> handlePickFile(editImgAfter,'after'));
+editImgBefore?.addEventListener('change', ()=> { lastImgKind='before'; handlePickFile(editImgBefore,'before'); });
+editImgAfter?.addEventListener('change',  ()=> { lastImgKind='after';  handlePickFile(editImgAfter,'after'); });
 btnClearImgBefore?.addEventListener('click', ()=> setImagePreview('before',''));
 btnClearImgAfter?.addEventListener('click',  ()=> setImagePreview('after',''));
 btnViewImgBefore?.addEventListener('click',   ()=> openLightbox(editImgBeforeData.value));
@@ -1183,6 +1234,49 @@ imgViewer?.addEventListener('click', e=>{ if(e.target===imgViewer) closeLightbox
 // drag-n-drop on labels
 setupDragDrop(dropBefore, editImgBefore, 'before');
 setupDragDrop(dropAfter,  editImgAfter,  'after');
+
+/* ===== (BARU) — Tambah field URL untuk gambar + Paste global ===== */
+function injectUrlBarUnder(areaEl, kind){
+  if(!areaEl) return;
+  const id = kind==='before' ? 'editImgBeforeUrl' : 'editImgAfterUrl';
+  if (document.getElementById(id)) return; // sudah dibuat
+
+  const wrap = document.createElement('div');
+  wrap.className = 'mt-2 flex gap-2';
+  wrap.innerHTML = `
+    <input id="${id}" type="url" placeholder="Tempel link gambar (https://… atau data:image/…)" class="flex-1 rounded-lg bg-slate-900 border border-slate-700 px-3 py-1.5 text-sm" />
+    <button type="button" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500">Muat</button>
+  `;
+  areaEl.insertAdjacentElement('afterend', wrap);
+
+  const input = wrap.querySelector('input');
+  const btn   = wrap.querySelector('button');
+
+  const loader = async () => {
+    const url = (input.value||'').trim();
+    if (!isLikelyImageURL(url)) { alert('Link tidak valid. Pakai URL file gambar langsung.'); return; }
+    const b64 = await urlToBase64Smart(url);
+    if (b64) setImagePreview(kind, b64);
+  };
+
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); loader(); }});
+  btn.addEventListener('click', loader);
+
+  input.addEventListener('focus', ()=>{ lastImgKind = kind; });
+}
+
+// inject URL bar bila ada drop zone
+injectUrlBarUnder(dropBefore, 'before');
+injectUrlBarUnder(dropAfter,  'after');
+
+// Global paste: jika ada URL gambar di clipboard, muat ke area terakhir yang aktif
+window.addEventListener('paste', async (e)=>{
+  const t = (e.clipboardData || window.clipboardData)?.getData?.('text') || '';
+  if (isLikelyImageURL(t)){
+    const b64 = await urlToBase64Smart(t.trim());
+    if (b64) setImagePreview(lastImgKind, b64);
+  }
+});
 
 /* ===== Init ===== */
 (function init(){
