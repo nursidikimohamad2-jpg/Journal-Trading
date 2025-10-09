@@ -905,16 +905,34 @@ exportHtmlBtn?.addEventListener('click', () => {
    EXPORT PRESENTASI (baru) — dengan gambar & card per trade
    ===================================================== */
 
-// sisipkan tombol baru di UI (sebelah Export HTML lama)
 (function injectExportPresentasiButton(){
   if (!exportHtmlBtn) return;
+
+  // 1) Kalau sudah ada tombol resmi kita, hapus dulu (supaya tidak dobel
+  //    jika file JS ter-load 2x karena cache/bundle)
+  const old = document.querySelector('#exportPresentBtn');
+  if (old) old.remove();
+
+  // 2) Hapus tombol "kembar" lain yang kebetulan teksnya sama tapi bukan milik kita
+  //    (misal ada tombol manual di HTML). Aman karena kita sisakan hanya yang ber-ID.
+  [...document.querySelectorAll('button')]
+    .filter(b => b.textContent.trim() === 'Export Presentasi' && b.id !== 'exportPresentBtn')
+    .forEach(b => b.remove());
+
+  // 3) Buat tombol resmi
   const btn = document.createElement('button');
   btn.id = 'exportPresentBtn';
+  btn.type = 'button';
   btn.className = 'bg-slate-900/70 ring-1 ring-white/10 px-3 py-1 rounded-lg';
   btn.textContent = 'Export Presentasi';
+
+  // sisipkan tepat setelah "Export HTML"
   exportHtmlBtn.insertAdjacentElement('afterend', btn);
+
+  // 4) Pasang handler
   btn.addEventListener('click', exportPresentationHTML);
 })();
+
 
 function exportPresentationHTML(){
   try {
