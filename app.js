@@ -1243,10 +1243,20 @@ function injectUrlBarUnder(areaEl, kind){
 
   const wrap = document.createElement('div');
   wrap.className = 'mt-2 flex gap-2';
-  wrap.innerHTML = `
-    <input id="${id}" type="url" placeholder="Tempel link gambar (https://… atau data:image/…)" class="flex-1 rounded-lg bg-slate-900 border border-slate-700 px-3 py-1.5 text-sm" />
-    <button type="button" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500">Muat</button>
-  `;
+ wrap.innerHTML = `
+  <input id="${id}" type="url"
+    placeholder="Tempel link gambar (https://… atau data:image/…)"
+    class="w-full rounded-xl border border-slate-300 bg-white text-slate-900 
+           px-3 py-2 text-sm placeholder-slate-500 
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+           dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700" />
+  <button type="button"
+    class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500">
+    Muat
+  </button>
+`;
+
+
   areaEl.insertAdjacentElement('afterend', wrap);
 
   const input = wrap.querySelector('input');
