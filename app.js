@@ -1,5 +1,5 @@
 /* =========================
-   RR JOURNAL — APP.JS
+   RR JOURNAL — APP.JS (UTUH)
    ========================= */
 
 /* ===== util DOM ===== */
@@ -51,7 +51,7 @@ const saveProj   = p  => localStorage.setItem(STORE_PROJ, JSON.stringify(p));
 const loadSettings = () => { try { return JSON.parse(localStorage.getItem(STORE_SETTINGS) || '{}'); } catch { return {}; } };
 const saveSettings = s  => localStorage.setItem(STORE_SETTINGS, JSON.stringify(s));
 
-/* ===== helpers ===== */
+/* ===== helpers umum ===== */
 const fmtDT     = s => s ? s.replace('T',' ') : '';
 const toDTInput = s => !s ? '' : (s.includes('T') ? s : s.replace(' ', 'T'));
 const nowISO    = () => new Date().toISOString();
@@ -59,18 +59,95 @@ const fmtMoney  = n => (isFinite(n) ? n.toLocaleString('id-ID',{minimumFractionD
 const slugify   = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'report';
 
 /* =========================================================
-   FAIR-FOREX — NORMALISASI SIMBOL & PRESISI HARGA
+   LIST SYMBOL + DROPDOWN
+   ========================================================= */
+const SYMBOLS = [
+  "EURUSD","GBPUSD","AUDUSD","NZDUSD","USDJPY","USDCHF","USDCAD",
+  "EURGBP","EURCHF","EURJPY","EURCAD","EURAUD","EURNZD",
+  "GBPJPY","GBPCHF","GBPAUD","GBPCAD","GBPNZD",
+  "AUDJPY","AUDNZD","AUDCAD","AUDCHF",
+  "NZDJPY","NZDCAD","NZDCHF",
+  "CADJPY","CHFJPY","CADCHF",
+  "XAUUSD","XAGUSD","US100"
+];
+
+/* Ganti input symbol → <select> pada form utama (tanpa edit index.html) */
+function ensureSymbolDropdownForAdd(){
+  if (!form) return;
+  const old = form.querySelector('#symbol');
+  if (!old) return;
+  if (old.tagName.toLowerCase() === 'select') { populateSelectOptions(old, SYMBOLS); return; }
+
+  const sel = document.createElement('select');
+  sel.id = old.id; sel.name = old.name || 'symbol';
+  sel.className = old.className; sel.required = true;
+
+  const ph = document.createElement('option');
+  ph.value = ''; ph.textContent = '-- pilih symbol --'; ph.disabled = true; ph.selected = true;
+  sel.appendChild(ph);
+
+  populateSelectOptions(sel, SYMBOLS);
+
+  const val = (old.value || '').toUpperCase().replace(/[^A-Z]/g,'');
+  if (val && SYMBOLS.includes(val)) sel.value = val;
+
+  old.replaceWith(sel);
+}
+
+/* Ganti input symbol → <select> pada modal edit */
+function ensureSymbolDropdownForEdit(){
+  if (!editForm) return;
+  const old = editForm.querySelector('[name="symbol"]');
+  if (!old) return;
+  if (old.tagName.toLowerCase() === 'select') { populateSelectOptions(old, SYMBOLS); return; }
+
+  const sel = document.createElement('select');
+  sel.name = 'symbol'; sel.id = old.id || 'editSymbol';
+  sel.className = old.className; sel.required = true;
+
+  const ph = document.createElement('option');
+  ph.value=''; ph.textContent='-- pilih symbol --'; ph.disabled=true; ph.selected=true;
+  sel.appendChild(ph);
+
+  populateSelectOptions(sel, SYMBOLS);
+  const val = (old.value || '').toUpperCase().replace(/[^A-Z]/g,'');
+  if (val && SYMBOLS.includes(val)) sel.value = val;
+
+  old.replaceWith(sel);
+}
+
+function populateSelectOptions(selectEl, list){
+  // hapus semua kecuali placeholder pertama bila ada
+  const hasPh = selectEl.options.length && !selectEl.options[0].value;
+  selectEl.innerHTML = '';
+  if (hasPh){
+    const ph = document.createElement('option');
+    ph.value=''; ph.textContent='-- pilih symbol --'; ph.disabled=true; ph.selected=true;
+    selectEl.appendChild(ph);
+  }
+  for (const s of list){
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    selectEl.appendChild(opt);
+  }
+}
+
+/* =========================================================
+   FAIR-FOREX — NORMALISASI & PRESISI
    ========================================================= */
 function normalizeSymbol(s){
-  // EUR/USD -> EURUSD, "gbp jpy" -> GBPJPY, "xau usd" -> XAUUSD
   return (s||'').toUpperCase().replace(/[^A-Z]/g,'').trim();
 }
 function precisionForSymbol(symRaw){
   const s = normalizeSymbol(symRaw);
   if (!s) return 5;
-  if (s.startsWith('XAU')) return 2;  // emas 2 desimal
-  if (s.endsWith('JPY'))   return 3;  // quote JPY 3 desimal
-  return 5;                            // mayor lain 5 desimal
+
+  // mapping khusus
+  const MAP = { XAUUSD:2, XAGUSD:3, US100:1 };
+  if (MAP[s] != null) return MAP[s];
+
+  if (s.endsWith('JPY')) return 3; // semua pair quote JPY
+  return 5;                        // mayor default
 }
 function stepForPrecision(p){ return Number(`1e-${p}`); }
 function roundTo(n, prec){ const f = Math.pow(10, prec); return Math.round(Number(n||0)*f)/f; }
@@ -84,10 +161,9 @@ function applyPriceFormatToAddForm(){
   const ph = p>0 ? ('0.' + '0'.repeat(p)) : '0';
   if(form.entry_price){ form.entry_price.step = step; form.entry_price.placeholder = ph; }
   if(form.stop_loss){   form.stop_loss.step   = step; form.stop_loss.placeholder   = ph; }
-  // preview pakai presisi ini
   calcPreview(Number(form.entry_price.value), Number(form.stop_loss.value), form.side.value, p);
 }
-/* Terapkan step & placeholder sesuai simbol — MODAL EDIT */
+/* Terapkan step & placeholder — MODAL EDIT */
 function applyPriceFormatToEditForm(){
   if(!editForm) return;
   const p = precisionForSymbol(editForm.symbol.value);
@@ -97,7 +173,29 @@ function applyPriceFormatToEditForm(){
   if(editForm.stop_loss){   editForm.stop_loss.step   = step; editForm.stop_loss.placeholder   = ph; }
 }
 
-/* ===== preview (mengikuti presisi simbol) ===== */
+/* ===== Active Project Helpers ===== */
+function setActiveProject(id='', name=''){
+  localStorage.setItem(ACTIVE_ID_KEY, id || '');
+  localStorage.setItem(ACTIVE_NAME_KEY, name || '');
+  updateActiveProjectUI();
+}
+function getActiveProject(){
+  return {
+    id:   localStorage.getItem(ACTIVE_ID_KEY)   || '',
+    name: localStorage.getItem(ACTIVE_NAME_KEY) || ''
+  };
+}
+function updateActiveProjectUI(){
+  const { id, name } = getActiveProject();
+  if (id) {
+    saveToActiveBtn?.classList.remove('hidden');
+    if (saveToActiveBtn) saveToActiveBtn.textContent = `Simpan (${name})`;
+  } else {
+    saveToActiveBtn?.classList.add('hidden');
+  }
+}
+
+/* ===== PREVIEW (mengikuti presisi simbol) ===== */
 function calcPreview(entry, sl, side, _precFromSymbol){
   const ok = Number.isFinite(entry) && Number.isFinite(sl);
   const prec = (_precFromSymbol ?? precisionForSymbol(form?.symbol?.value || ''));
@@ -108,7 +206,6 @@ function calcPreview(entry, sl, side, _precFromSymbol){
   }
   const d = Math.abs(entry - sl);
 
-  // Semua output preview mengikuti presisi SIMBOL
   rPointEl.textContent = toFixedBy(roundTo(d, prec), prec);
 
   const tp1 = side==='LONG'? entry+d : entry-d;
@@ -222,6 +319,10 @@ function deleteTrade(id){ save(load().filter(x=>x.id!==id)); }
 /* ===== edit modal ===== */
 function openEdit(id){
   const t = load().find(x=>x.id===id); if(!t) return;
+
+  // pastikan dropdown ada sebelum isi value
+  ensureSymbolDropdownForEdit();
+
   editForm.id.value = id;
   editForm.setup_date.value = toDTInput(t.setup_date || '');
   editForm.symbol.value = normalizeSymbol(t.symbol || '');
@@ -273,32 +374,32 @@ function openSaveProjectModal(){
 }
 function closeSaveProjectModal(){ saveProjectModal.classList.add('hidden'); saveProjectModal.classList.remove('flex'); }
 
-/* ===== events ===== */
+/* ===== events: ADD FORM ===== */
 form?.addEventListener('input', ()=>{
-  // ubah step/placeholder saat simbol berubah + hitung preview mengikuti presisi simbol
   applyPriceFormatToAddForm();
 });
-form?.symbol?.addEventListener('input', applyPriceFormatToAddForm);
+form?.addEventListener('change', e=>{
+  if (e.target && e.target.id === 'symbol') applyPriceFormatToAddForm();
+});
 
-/* validasi + tambah row (TIDAK reset modal/risk) */
+/* validasi + tambah row  (TIDAK reset modal/risk) */
 form?.addEventListener('submit', e=>{
   e.preventDefault();
 
   // simpan nilai modal/risk sekarang agar tidak ikut ke-reset
   const keepSettings = getSettings();
 
-  const symbolRaw = (form.symbol.value || '').trim();
-  const symbol    = normalizeSymbol(symbolRaw);
-  const side      = form.side.value;
-  const entryRaw  = Number(form.entry_price.value);
-  const slRaw     = Number(form.stop_loss.value);
-  const prec      = precisionForSymbol(symbol);
+  const symbol = normalizeSymbol(form.symbol.value || '');
+  const side   = form.side.value;
+  const entry  = Number(form.entry_price.value);
+  const sl     = Number(form.stop_loss.value);
+  const prec   = precisionForSymbol(symbol);
 
-  if (!symbol || !Number.isFinite(entryRaw) || !Number.isFinite(slRaw)) {
+  if (!symbol || !Number.isFinite(entry) || !Number.isFinite(sl)) {
     alert('Isi minimal: Symbol, Entry, dan Stop Loss dengan nilai yang valid.');
     return;
   }
-  if (entryRaw === slRaw) {
+  if (entry === sl) {
     alert('Entry dan Stop Loss tidak boleh sama.');
     return;
   }
@@ -307,14 +408,14 @@ form?.addEventListener('submit', e=>{
     id: uid(),
     symbol,
     side,
-    entry_price: roundTo(entryRaw, prec),
-    stop_loss:   roundTo(slRaw,  prec),
+    entry_price: roundTo(entry, prec),
+    stop_loss:   roundTo(sl,   prec),
     setup_date: form.setup_date.value || '',
     note: form.note.value || '',
     result: ''
   });
 
-  // reset field trade saja
+  // reset hanya field trade
   form.reset();
 
   // kembalikan modal/risk (project berjalan)
@@ -331,6 +432,7 @@ form?.addEventListener('reset', ()=>{
   setTimeout(()=>{ setSettings(s); calcSim(); }, 0);
 });
 
+/* ===== events: TABLE & EDIT ===== */
 tradeList.addEventListener('change', e=>{
   const sel = e.target.closest('select[data-id]');
   if(sel){ updateTrade(sel.dataset.id, { [sel.dataset.field||'result']: sel.value }); refresh(); }
@@ -343,6 +445,10 @@ tradeList.addEventListener('click', e=>{
 });
 
 editCancel?.addEventListener('click', closeEdit);
+editForm?.symbol?.addEventListener('input', applyPriceFormatToEditForm);
+editForm?.addEventListener('change', e=>{
+  if (e.target && (e.target.name === 'symbol')) applyPriceFormatToEditForm();
+});
 editForm?.addEventListener('submit', e=>{
   e.preventDefault();
 
@@ -358,13 +464,12 @@ editForm?.addEventListener('submit', e=>{
   });
   closeEdit(); refresh();
 });
-editForm?.symbol?.addEventListener('input', applyPriceFormatToEditForm);
 
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){ closeEdit(); closeProjectsModal(); closeSaveProjectModal(); }
 });
 
-/* export/import/clear */
+/* ===== Export/Import/Clear ===== */
 exportBtn?.addEventListener('click', ()=>{
   const blob = new Blob([JSON.stringify(load(), null, 2)], {type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='rr-journal.json';
@@ -457,27 +562,6 @@ projectsList?.addEventListener('click', e=>{
   }
 });
 
-/* simpan langsung ke project aktif */
-saveToActiveBtn?.addEventListener('click', () => {
-  const { id, name } = getActiveProject();
-  if (!id) { alert('Belum ada project aktif. Buka "Projects" lalu pilih "Lanjut Journal".'); return; }
-
-  const projects = loadProj();
-  const p = projects.find(x => x.id === id);
-  if (!p) {
-    alert('Project aktif tidak ditemukan. Silakan pilih ulang di "Projects".');
-    setActiveProject('', '');
-    return;
-  }
-
-  p.trades    = load();
-  p.settings  = getSettings();
-  p.updatedAt = nowISO();
-  saveProj(projects);
-
-  alert(`Perubahan disimpan ke project "${name}".`);
-});
-
 /* ===== Simulasi Balance ===== */
 function getSettings(){
   return {
@@ -515,15 +599,6 @@ function calcSim(){
   });
 }
 
-/* init settings from localStorage */
-(function initSettings(){
-  const s = loadSettings();
-  if(baseInput) baseInput.value = (s.base ?? '');
-  if(riskInput) riskInput.value = (s.risk ?? '');
-  baseInput?.addEventListener('input', ()=> calcSim());
-  riskInput?.addEventListener('input', ()=> calcSim());
-})();
-
 /* ===== Apply URL params ke form & preview ===== */
 (function applyURLParams(){
   if (!window.URLSearchParams || !form) return;
@@ -542,7 +617,7 @@ function calcSim(){
   set('stop_loss', v => v || '');
   set('note', v => v || '');
 
-  // terapkan format + preview kalau param URL ikut mengisi nilai
+  ensureSymbolDropdownForAdd();
   applyPriceFormatToAddForm();
 })();
 
@@ -702,6 +777,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="muted">Dibuat: ${createdAt} • Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'}</div>
     </div>
 
+    <!-- Probabilitas -->
     <div class="grid g-4" style="margin-bottom:12px">
       <div class="card"><div class="muted">Jumlah Transaksi</div><div class="big">${stats.total}</div></div>
       <div class="card"><div class="muted">Prob ≥ TP1</div><div class="row"><div class="big">${stats.prob.tp1}%</div><div class="bar"><i style="width:${stats.prob.tp1}%"></i></div></div></div>
@@ -709,10 +785,18 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card"><div class="muted">Prob ≥ TP3</div><div class="row"><div class="big">${stats.prob.tp3}%</div><div class="bar"><i style="width:${stats.prob.tp3}%"></i></div></div></div>
     </div>
 
+    <!-- Ringkasan R -->
     <div class="grid g-4" style="margin-bottom:12px">
-      <div class="card"><div class="muted">Total R (Final/Net)</div><div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div></div>
-      <div class="card"><div class="muted">ΣR Komponen (R1+R2+R3)</div><div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div></div>
-      <div class="card"><div class="muted">Akumulasi R</div>
+      <div class="card">
+        <div class="muted">Total R (Final/Net)</div>
+        <div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div>
+      </div>
+      <div class="card">
+        <div class="muted">ΣR Komponen (R1+R2+R3)</div>
+        <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
+      </div>
+      <div class="card">
+        <div class="muted">Akumulasi R</div>
         <div class="r-list">
           <div>R1: <b class="${sign(stats.rsum.r1)}">${stats.rsum.r1}</b></div>
           <div>R2: <b class="${sign(stats.rsum.r2)}">${stats.rsum.r2}</b></div>
@@ -726,6 +810,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       </div>
     </div>
 
+    <!-- Skenario -->
     <div class="grid g-4" style="margin-bottom:12px">
       ${['rr1','rr2','rr3','combined'].map(k=>{
         const label={rr1:'TP1',rr2:'TP2',rr3:'TP3',combined:'Semua R'}[k];
@@ -739,6 +824,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       }).join('')}
     </div>
 
+    <!-- Hasil per Kategori + Risiko -->
     <div class="grid g-4">
       <div class="card">
         <div class="muted">Win (kumulatif ≥ TP)</div>
@@ -803,7 +889,21 @@ exportHtmlBtn?.addEventListener('click', () => {
   }
 });
 
-/* ===== init ===== */
-refresh();
-updateActiveProjectUI();
-calcSim();
+/* ===== Init ===== */
+(function init(){
+  ensureSymbolDropdownForAdd();      // jadikan dropdown di form utama
+  ensureSymbolDropdownForEdit();     // siapkan dropdown di modal edit (kalau dom-nya sudah ada)
+
+  const s = loadSettings();
+  if(baseInput) baseInput.value = (s.base ?? '');
+  if(riskInput) riskInput.value = (s.risk ?? '');
+  baseInput?.addEventListener('input', ()=> calcSim());
+  riskInput?.addEventListener('input', ()=> calcSim());
+
+  // Terapkan format awal sesuai simbol (kalau sudah terisi)
+  applyPriceFormatToAddForm();
+
+  refresh();
+  updateActiveProjectUI();
+  calcSim();
+})();
