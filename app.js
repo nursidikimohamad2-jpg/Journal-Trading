@@ -758,7 +758,7 @@ function computeStats(trades){
   };
 }
 
-/* ===== template laporan HTML lama (rapi & seragam) ===== */
+/* ===== template laporan HTML lama (tetap ada) ===== */
 function buildReportHTML({ projectName, createdAt, stats }) {
   const css = `
   :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--pos:#10b981;--neg:#f43f5e}
@@ -767,15 +767,8 @@ function buildReportHTML({ projectName, createdAt, stats }) {
   .wrap{max-width:1024px;margin:0 auto;padding:24px}
   .grid{display:grid;gap:12px}
   .g-4{grid-template-columns:repeat(4,1fr);align-items:stretch}
-  .g-3{grid-template-columns:repeat(3,1fr);align-items:stretch}  /* <— tambahkan grid 3 kolom */
-  .card{
-    background:rgba(15,23,42,.9);
-    border:1px solid rgba(255,255,255,.08);
-    border-radius:12px;
-    padding:16px;
-    display:flex;flex-direction:column;justify-content:space-between;
-    min-height:150px
-  }
+  .card{background:rgba(15,23,42,.9);border:1px solid rgba(255,255,255,.08);border-radius:12px;
+        padding:16px;display:flex;flex-direction:column;justify-content:space-between;min-height:150px}
   h1{font-size:22px;margin:0 0 8px}
   .muted{color:var(--muted)} .big{font-size:22px;font-weight:700}
   .row{display:flex;gap:12px;align-items:center}
@@ -786,7 +779,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
   .r-list{display:flex;flex-direction:column;gap:6px;line-height:1.4}
   @media print{body{background:#fff;color:#000}.card{background:#fff;border-color:#ddd}}
   `;
-  const fmt  = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2});
   const sign = n => n>=0?'pos':'neg';
 
   return `<!doctype html>
@@ -795,13 +788,11 @@ function buildReportHTML({ projectName, createdAt, stats }) {
   <title>Laporan — ${projectName}</title><style>${css}</style></head>
   <body><div class="wrap">
 
-    <!-- Header -->
     <div class="card" style="margin-bottom:12px;min-height:auto">
       <h1>${projectName}</h1>
       <div class="muted">Dibuat: ${createdAt} • Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'}</div>
     </div>
 
-    <!-- Ringkas atas: 4 kartu -->
     <div class="grid g-4" style="margin-bottom:12px">
       <div class="card"><div class="muted">Jumlah Transaksi</div><div class="big">${stats.total}</div></div>
       <div class="card"><div class="muted">Prob ≥ TP1</div><div class="row"><div class="big">${stats.prob.tp1}%</div><div class="bar"><i style="width:${stats.prob.tp1}%"></i></div></div></div>
@@ -809,13 +800,11 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card"><div class="muted">Prob ≥ TP3</div><div class="row"><div class="big">${stats.prob.tp3}%</div><div class="bar"><i style="width:${stats.prob.tp3}%"></i></div></div></div>
     </div>
 
-    <!-- RINGKAS TENGAH: dibikin 3 kolom seragam -->
-    <div class="grid g-3" style="margin-bottom:12px">
+    
       <div class="card">
         <div class="muted">ΣR Komponen (R1+R2+R3)</div>
         <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
       </div>
-
       <div class="card">
         <div class="muted">Akumulasi R</div>
         <div class="r-list">
@@ -824,7 +813,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
           <div>R3: <b class="${sign(stats.rsum.r3)}">${stats.rsum.r3}</b></div>
         </div>
       </div>
-
       <div class="card">
         <div class="muted">Simulasi Balance</div>
         <div>Modal: <b>$${Number(stats.sim.base).toLocaleString('id-ID')}</b></div>
@@ -832,7 +820,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       </div>
     </div>
 
-    <!-- Skenario TP1 / TP2 / TP3 / Semua R -->
     <div class="grid g-4" style="margin-bottom:12px">
       ${['rr1','rr2','rr3','combined'].map(k=>{
         const label={rr1:'TP1',rr2:'TP2',rr3:'TP3',combined:'Semua R'}[k];
@@ -846,7 +833,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       }).join('')}
     </div>
 
-    <!-- Statistik bawah -->
     <div class="grid g-4">
       <div class="card">
         <div class="muted">Win (kumulatif ≥ TP)</div>
@@ -879,7 +865,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
         <div><b class="pos">$${fmt(stats.streak.maxConsecProfitUSD)}</b></div>
         <div><b class="pos">${stats.streak.maxConsecProfitR}R</b></div>
       </div>
-
       <div class="card">
         <div class="muted">Max Drawdown</div>
         <div><b class="neg">$${fmt(stats.drawdown.maxAbs)}</b></div>
@@ -890,7 +875,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
     <div class="footer">RR Journal — Export HTML</div>
   </div></body></html>`;
 }
-
 
 /* ===== handler tombol Export HTML (lama) ===== */
 exportHtmlBtn?.addEventListener('click', () => {
@@ -1001,50 +985,45 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
   `;
   const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2});
   const fmt0 = n => (+n).toLocaleString('id-ID',{maximumFractionDigits:0});
-  const signClass = n => n>=0 ? 'pos' : 'neg';\// P/L versi ΣR komponen (R1+R2+R3)
-const sumRComponents = stats.rsumComponentsTotal;
-const pnlFromComponents = sumRComponents * stats.sim.oneR;
-
+  const signClass = n => n>=0 ? 'pos' : 'neg';
 
   const win = stats.results.wins;
   const loss = stats.results.counts.SL;
 
- const header = `
-  <div>
-    <h1>${projectName}</h1>
-    <div class="muted">
-      Rentang: ${stats.range.min || '-'} — ${stats.range.max || '-'} • Disusun otomatis dari RR Journal
-    </div>
+  const header = `
+    <div>
+     <h1>${projectName}</h1>
+<div class="muted">
+  Rentang: ${stats.range.min || '-'} — ${stats.range.max || '-'} • Disusun otomatis dari RR Journal
+</div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="k">Transaksi</div>
+    <div class="v">${fmt0(stats.total)}</div>
   </div>
 
-  <div class="cards">
-    <div class="card">
-      <div class="k">Transaksi</div>
-      <div class="v">${fmt0(stats.total)}</div>
-    </div>
-
-    <div class="card">
-      <div class="k">Win / Loss</div>
-      <div class="v">${fmt0(stats.results.wins)} / ${fmt0(stats.results.counts.SL)}</div>
-    </div>
-
-    <div class="card">
-      <div class="k">ΣR (R1+R2+R3)</div>
-      <div class="v ${signClass(sumRComponents)}">${sumRComponents}</div>
-    </div>
-
-    <div class="card">
-      <div class="k">1R (USD)</div>
-      <div class="v">$${fmt(stats.sim.oneR)}</div>
-    </div>
-
-    <div class="card">
-      <div class="k">P/L (USD)</div>
-      <div class="v ${signClass(pnlFromComponents)}">
-        ${pnlFromComponents>=0?'+':''}$${fmt(pnlFromComponents)}
-      </div>
-    </div>
+  <div class="card">
+    <div class="k">Win / Loss</div>
+    <div class="v">${fmt0(win)} / ${fmt0(loss)}</div>
   </div>
+
+  <div class="card">
+    <div class="k">ΣR (R1+R2+R3)</div>
+    <div class="v ${signClass(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
+  </div>
+
+  <div class="card">
+    <div class="k">1R (USD)</div>
+    <div class="v">$${fmt(stats.sim.oneR)}</div>
+  </div>
+
+  <div class="card">
+    <div class="k">P/L (USD)</div>
+    <div class="v ${signClass(stats.sim.pnl)}">$${fmt(stats.sim.pnl)}</div>
+  </div>
+</div>
 `;
 
   // running P/L & Equity
