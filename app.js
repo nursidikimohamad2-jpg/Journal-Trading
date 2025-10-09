@@ -1264,17 +1264,50 @@ function injectUrlBarUnder(areaEl, kind){
 
   input.addEventListener('focus', ()=>{ lastImgKind = kind; });
 }
-
-// inject URL bar bila ada drop zone
+// inject URL bar bila ada drop zone (bisa tetap di init atau di openEdit)
 injectUrlBarUnder(dropBefore, 'before');
 injectUrlBarUnder(dropAfter,  'after');
 
-// Global paste: jika ada URL gambar di clipboard, muat ke area terakhir yang aktif
-window.addEventListener('paste', async (e)=>{
-  const t = (e.clipboardData || window.clipboardData)?.getData?.('text') || '';
-  if (isLikelyImageURL(t)){
-    const b64 = await urlToBase64Smart(t.trim());
+// Paste global: dukung gambar langsung & link gambar
+window.addEventListener('paste', async (e) => {
+  const dt = e.clipboardData || window.clipboardData;
+  if (!dt) return;
+
+  // 1️⃣ Jika yang ditempel adalah gambar (TradingView -> Salin gambar)
+  const items = dt.items || [];
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile?.();
+      if (file) {
+        const b64 = await fileToBase64(file);
+        if (b64) setImagePreview(lastImgKind, b64);
+        e.preventDefault();
+        return;
+      }
+    }
+  }
+
+  // 2️⃣ Jika fokus di kolom URL (auto load setelah ditempel)
+  const el = document.activeElement;
+  const isUrlInput = el && (el.id === 'editImgBeforeUrl' || el.id === 'editImgAfterUrl');
+  if (isUrlInput) {
+    setTimeout(async () => {
+      const url = (el.value || '').trim();
+      if (isLikelyImageURL(url)) {
+        const kind = el.id === 'editImgBeforeUrl' ? 'before' : 'after';
+        const b64 = await urlToBase64Smart(url);
+        if (b64) setImagePreview(kind, b64);
+      }
+    }, 0);
+    return;
+  }
+
+  // 3️⃣ Jika clipboard berisi teks URL gambar dan bukan di kolom URL
+  const text = dt.getData?.('text')?.trim() || '';
+  if (text && isLikelyImageURL(text)) {
+    const b64 = await urlToBase64Smart(text);
     if (b64) setImagePreview(lastImgKind, b64);
+    e.preventDefault();
   }
 });
 
