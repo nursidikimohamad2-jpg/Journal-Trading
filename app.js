@@ -58,50 +58,25 @@ const nowISO    = () => new Date().toISOString();
 const fmtMoney  = n => (isFinite(n) ? n.toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2}) : '0.00');
 const slugify   = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'report';
 
-function setActiveProject(id='', name=''){
-  localStorage.setItem(ACTIVE_ID_KEY, id || '');
-  localStorage.setItem(ACTIVE_NAME_KEY, name || '');
-  updateActiveProjectUI();
-}
-function getActiveProject(){
-  return {
-    id:   localStorage.getItem(ACTIVE_ID_KEY)   || '',
-    name: localStorage.getItem(ACTIVE_NAME_KEY) || ''
-  };
-}
-function updateActiveProjectUI(){
-  const { id, name } = getActiveProject();
-  if (id) {
-    saveToActiveBtn?.classList.remove('hidden');
-    if (saveToActiveBtn) saveToActiveBtn.textContent = `Simpan (${name})`;
-  } else {
-    saveToActiveBtn?.classList.add('hidden');
-  }
-}
-
 /* =========================================================
    FAIR-FOREX — NORMALISASI SIMBOL & PRESISI HARGA
    ========================================================= */
-// Normalisasi: uppercase + buang spasi/pemisah (EUR/USD -> EURUSD, "gbp jpy" -> GBPJPY)
 function normalizeSymbol(s){
+  // EUR/USD -> EURUSD, "gbp jpy" -> GBPJPY, "xau usd" -> XAUUSD
   return (s||'').toUpperCase().replace(/[^A-Z]/g,'').trim();
 }
-// Presisi per simbol:
-// - XAU...  -> 2 desimal
-// - ...JPY  -> 3 desimal
-// - lainnya -> 5 desimal
 function precisionForSymbol(symRaw){
   const s = normalizeSymbol(symRaw);
   if (!s) return 5;
-  if (s.startsWith('XAU')) return 2;
-  if (s.endsWith('JPY'))   return 3;
-  return 5;
+  if (s.startsWith('XAU')) return 2;  // emas 2 desimal
+  if (s.endsWith('JPY'))   return 3;  // quote JPY 3 desimal
+  return 5;                            // mayor lain 5 desimal
 }
 function stepForPrecision(p){ return Number(`1e-${p}`); }
 function roundTo(n, prec){ const f = Math.pow(10, prec); return Math.round(Number(n||0)*f)/f; }
 function toFixedBy(n, prec){ return Number.isFinite(n) ? Number(n).toFixed(prec) : (0).toFixed(prec); }
 
-// Terapkan step & placeholder sesuai simbol — FORM TAMBAH
+/* Terapkan step & placeholder sesuai simbol — FORM TAMBAH */
 function applyPriceFormatToAddForm(){
   if(!form) return;
   const p = precisionForSymbol(form.symbol.value);
@@ -109,10 +84,10 @@ function applyPriceFormatToAddForm(){
   const ph = p>0 ? ('0.' + '0'.repeat(p)) : '0';
   if(form.entry_price){ form.entry_price.step = step; form.entry_price.placeholder = ph; }
   if(form.stop_loss){   form.stop_loss.step   = step; form.stop_loss.placeholder   = ph; }
-  // update preview agar mengikuti presisi saat ini
+  // preview pakai presisi ini
   calcPreview(Number(form.entry_price.value), Number(form.stop_loss.value), form.side.value, p);
 }
-// Terapkan step & placeholder sesuai simbol — MODAL EDIT
+/* Terapkan step & placeholder sesuai simbol — MODAL EDIT */
 function applyPriceFormatToEditForm(){
   if(!editForm) return;
   const p = precisionForSymbol(editForm.symbol.value);
@@ -122,17 +97,19 @@ function applyPriceFormatToEditForm(){
   if(editForm.stop_loss){   editForm.stop_loss.step   = step; editForm.stop_loss.placeholder   = ph; }
 }
 
-/* ===== preview ===== */
+/* ===== preview (mengikuti presisi simbol) ===== */
 function calcPreview(entry, sl, side, _precFromSymbol){
   const ok = Number.isFinite(entry) && Number.isFinite(sl);
   const prec = (_precFromSymbol ?? precisionForSymbol(form?.symbol?.value || ''));
-  if (!ok){ 
-    rPointEl.textContent='0.00'; 
-    tp1El.textContent=tp2El.textContent=tp3El.textContent='0.00'; 
-    return; 
+  if (!ok){
+    rPointEl.textContent='0.00';
+    tp1El.textContent=tp2El.textContent=tp3El.textContent='0.00';
+    return;
   }
   const d = Math.abs(entry - sl);
-  rPointEl.textContent = toFixedBy(d, Math.max(2, prec));
+
+  // Semua output preview mengikuti presisi SIMBOL
+  rPointEl.textContent = toFixedBy(roundTo(d, prec), prec);
 
   const tp1 = side==='LONG'? entry+d : entry-d;
   const tp2 = side==='LONG'? entry+2*d : entry-2*d;
@@ -234,8 +211,7 @@ function refresh(){
   const pct = x => (nDone>0?Math.round(x/nDone*100):0)+'%';
   pBox1.textContent = pct(n1); pBox2.textContent = pct(n2); pBox3.textContent = pct(n3);
 
-  // update simulasi balance
-  calcSim(rnet);
+  calcSim(rnet); // update simulasi balance
 }
 
 /* ===== CRUD data ===== */
@@ -299,13 +275,12 @@ function closeSaveProjectModal(){ saveProjectModal.classList.add('hidden'); save
 
 /* ===== events ===== */
 form?.addEventListener('input', ()=>{
-  // update step/placeholder kalau simbol berubah + hitung preview
+  // ubah step/placeholder saat simbol berubah + hitung preview mengikuti presisi simbol
   applyPriceFormatToAddForm();
 });
-
 form?.symbol?.addEventListener('input', applyPriceFormatToAddForm);
 
-/* validasi + tambah row  (TIDAK reset modal/risk) */
+/* validasi + tambah row (TIDAK reset modal/risk) */
 form?.addEventListener('submit', e=>{
   e.preventDefault();
 
@@ -406,7 +381,6 @@ clearBtn?.addEventListener('click', ()=>{
   if(confirm('Hapus semua data jurnal aktif?')){
     localStorage.removeItem(STORE);
     refresh();
-    // setActiveProject('', ''); // jika ingin menonaktifkan status project aktif
   }
 });
 
@@ -432,8 +406,6 @@ confirmSaveProject?.addEventListener('click', ()=>{
   const projects = loadProj();
   const existing = projects.find(p => p.name.toLowerCase() === name.toLowerCase());
   const snapshot = JSON.parse(JSON.stringify(trades));
-
-  // sertakan settings saat simpan
   const settings = getSettings();
 
   if (existing) {
@@ -474,11 +446,7 @@ projectsList?.addEventListener('click', e=>{
   if(btn.dataset.act==='open'){
     save(item.trades); refresh(); closeProjectsModal();
     setActiveProject(item.id, item.name);
-    // restore settings utk project ini jika ada
-    if(item.settings){
-      setSettings(item.settings);
-      calcSim(); // recalc
-    }
+    if(item.settings){ setSettings(item.settings); calcSim(); }
   }else if(btn.dataset.act==='del'){
     if(confirm(`Hapus project "${item.name}"?`)){
       saveProj(projects.filter(p=>p.id!==id));
@@ -526,9 +494,8 @@ function currentOneR(){
   const s = getSettings();
   return s.base * (s.risk/100);
 }
-function calcSim(_rnetFromRefresh){
+function calcSim(){
   const s = getSettings();
-  // persist every change
   saveSettings(s);
 
   const oneR = currentOneR();
@@ -540,11 +507,10 @@ function calcSim(_rnetFromRefresh){
   if(pnlMoneyBox) pnlMoneyBox.textContent = (pnl>=0? '+' : '') + fmtMoney(pnl);
   if(simBalBox)   simBalBox.textContent   = fmtMoney(eq);
 
-  // tint color based on +/-
   [pnlMoneyBox, simBalBox].forEach(el=>{
     if(!el) return;
     el.classList.remove('text-emerald-400','text-rose-400');
-    const v = el===pnlMoneyBox ? pnl : eq - s.base; // equity > base -> hijau
+    const v = el===pnlMoneyBox ? pnl : eq - s.base;
     el.classList.add(v>=0 ? 'text-emerald-400' : 'text-rose-400');
   });
 }
@@ -576,7 +542,7 @@ function calcSim(_rnetFromRefresh){
   set('stop_loss', v => v || '');
   set('note', v => v || '');
 
-  // perbarui preview + format harga jika ada nilai dari URL
+  // terapkan format + preview kalau param URL ikut mengisi nilai
   applyPriceFormatToAddForm();
 })();
 
@@ -587,7 +553,6 @@ function calcSim(_rnetFromRefresh){
 function downloadTextFile(filename, text, mime = 'text/html') {
   try {
     const blob = new Blob([text], { type: mime });
-
     if (window.navigator && window.navigator.msSaveOrOpenBlob) {
       window.navigator.msSaveOrOpenBlob(blob, filename);
       return;
@@ -609,8 +574,6 @@ function computeStats(trades){
   let nDone=0,n1=0,n2=0,n3=0;
   let r1=0,r2=0,r3=0,rnet=0;
   const dates=[];
-
-  // exact hasil per kategori
   const resultCounts = { SL:0, TP1:0, TP2:0, TP3:0 };
 
   for (const t of trades){
@@ -618,8 +581,8 @@ function computeStats(trades){
 
     const res = t.result || '';
     const [x1,x2,x3] = rByResult(res);
-    r1 += x1; r2 += x2; r3 += x3;      // ΣR komponen
-    rnet += netROf(res);               // R final / net
+    r1 += x1; r2 += x2; r3 += x3;
+    rnet += netROf(res);
 
     const lvl = levelFromResult(res);
     if (lvl !== null){ nDone++; if(lvl>=1)n1++; if(lvl>=2)n2++; if(lvl>=3)n3++; }
@@ -630,7 +593,6 @@ function computeStats(trades){
     if (res==='TP3') resultCounts.TP3++;
   }
 
-  // kumulatif (≥TPn): TP3 dihitung juga untuk ≥TP2 & ≥TP1, TP2 juga untuk ≥TP1
   const cumulativeWin = {
     ge_tp1: resultCounts.TP1 + resultCounts.TP2 + resultCounts.TP3,
     ge_tp2: resultCounts.TP2 + resultCounts.TP3,
@@ -639,7 +601,6 @@ function computeStats(trades){
 
   const pct=(x,b)=>b>0?Math.round(x/b*100):0;
 
-  // rentang tanggal
   let minDate='', maxDate='';
   if (dates.length){
     const arr = dates.slice().sort();
@@ -647,7 +608,6 @@ function computeStats(trades){
     maxDate = (arr[arr.length-1]||'').replace('T',' ');
   }
 
-  // simulasi balance
   const { base, risk } = getSettings();
   const oneR = base * (risk/100);
 
@@ -656,7 +616,6 @@ function computeStats(trades){
   const sim3   = { sumR:r3,             pnl: oneR*r3,             equity: base + oneR*r3 };
   const simAll = { sumR:r1+r2+r3,       pnl: oneR*(r1+r2+r3),     equity: base + oneR*(r1+r2+r3) };
 
-  // urutan hasil aktual → streak & DD
   const seq = trades.map(t=>netROf(t.result||'')).filter(v=>v!==0);
 
   let curW=0,curL=0,maxW=0,maxL=0;
@@ -688,30 +647,22 @@ function computeStats(trades){
     total: trades.length,
     prob: { tp1:pct(n1,nDone), tp2:pct(n2,nDone), tp3:pct(n3,nDone) },
     rsum: { r1, r2, r3 },
-    rsumTotal: rnet,                       // Total R (final/net)
-    rsumComponentsTotal: r1 + r2 + r3,     // ΣR komponen
+    rsumTotal: rnet,
+    rsumComponentsTotal: r1 + r2 + r3,
     range: { min:minDate, max:maxDate },
-
-    results: {
-      counts: resultCounts,                // exact
-      cumulative: cumulativeWin,           // kumulatif ≥TP
-      wins, losses
-    },
-
+    results: { counts: resultCounts, cumulative: cumulativeWin, wins, losses },
     sim: {
       base, risk, oneR,
       pnl: oneR*rnet,
       equity: base + oneR*rnet,
       scenarios: { rr1:sim1, rr2:sim2, rr3:sim3, combined:simAll }
     },
-
     streak: {
       maxConsecWin: maxW,
       maxConsecLoss: maxL,
       maxConsecProfitR: maxProfitR,
       maxConsecProfitUSD: oneR*maxProfitR
     },
-
     drawdown: { maxAbs:maxDD, maxPct:ddPct, minEquity:minEq, maxEquity:maxEq }
   };
 }
@@ -751,7 +702,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="muted">Dibuat: ${createdAt} • Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'}</div>
     </div>
 
-    <!-- Probabilitas -->
     <div class="grid g-4" style="margin-bottom:12px">
       <div class="card"><div class="muted">Jumlah Transaksi</div><div class="big">${stats.total}</div></div>
       <div class="card"><div class="muted">Prob ≥ TP1</div><div class="row"><div class="big">${stats.prob.tp1}%</div><div class="bar"><i style="width:${stats.prob.tp1}%"></i></div></div></div>
@@ -759,18 +709,10 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card"><div class="muted">Prob ≥ TP3</div><div class="row"><div class="big">${stats.prob.tp3}%</div><div class="bar"><i style="width:${stats.prob.tp3}%"></i></div></div></div>
     </div>
 
-    <!-- Ringkasan R -->
     <div class="grid g-4" style="margin-bottom:12px">
-      <div class="card">
-        <div class="muted">Total R (Final/Net)</div>
-        <div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div>
-      </div>
-      <div class="card">
-        <div class="muted">ΣR Komponen (R1+R2+R3)</div>
-        <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
-      </div>
-      <div class="card">
-        <div class="muted">Akumulasi R</div>
+      <div class="card"><div class="muted">Total R (Final/Net)</div><div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div></div>
+      <div class="card"><div class="muted">ΣR Komponen (R1+R2+R3)</div><div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div></div>
+      <div class="card"><div class="muted">Akumulasi R</div>
         <div class="r-list">
           <div>R1: <b class="${sign(stats.rsum.r1)}">${stats.rsum.r1}</b></div>
           <div>R2: <b class="${sign(stats.rsum.r2)}">${stats.rsum.r2}</b></div>
@@ -784,7 +726,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       </div>
     </div>
 
-    <!-- Skenario -->
     <div class="grid g-4" style="margin-bottom:12px">
       ${['rr1','rr2','rr3','combined'].map(k=>{
         const label={rr1:'TP1',rr2:'TP2',rr3:'TP3',combined:'Semua R'}[k];
@@ -798,7 +739,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       }).join('')}
     </div>
 
-    <!-- Hasil per Kategori + Risiko -->
     <div class="grid g-4">
       <div class="card">
         <div class="muted">Win (kumulatif ≥ TP)</div>
@@ -848,10 +788,6 @@ exportHtmlBtn?.addEventListener('click', () => {
     const trades=load();
     const {name:activeName}=getActiveProject();
     const projectName=activeName||'Jurnal Aktif';
-
-    if (typeof computeStats!=='function' || typeof buildReportHTML!=='function') {
-      throw new Error('computeStats atau buildReportHTML tidak ditemukan.');
-    }
 
     const stats=computeStats(trades);
     const html=buildReportHTML({
