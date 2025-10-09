@@ -761,24 +761,64 @@ function computeStats(trades){
 /* ===== template laporan HTML lama (tetap ada) ===== */
 function buildReportHTML({ projectName, createdAt, stats }) {
   const css = `
-  :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--pos:#10b981;--neg:#f43f5e}
-  *{box-sizing:border-box}
-  body{margin:0;background:linear-gradient(#0b1220,#0a1020);color:var(--text);font:14px/1.45 system-ui,Inter,Segoe UI,Roboto}
-  .wrap{max-width:1024px;margin:0 auto;padding:24px}
-  .grid{display:grid;gap:12px}
-  .g-4{grid-template-columns:repeat(4,1fr);align-items:stretch}
-  .card{background:rgba(15,23,42,.9);border:1px solid rgba(255,255,255,.08);border-radius:12px;
-        padding:16px;display:flex;flex-direction:column;justify-content:space-between;min-height:150px}
-  h1{font-size:22px;margin:0 0 8px}
-  .muted{color:var(--muted)} .big{font-size:22px;font-weight:700}
-  .row{display:flex;gap:12px;align-items:center}
-  .bar{height:8px;background:#0b7180;border-radius:2px;overflow:hidden;flex:1}
-  .bar>i{display:block;height:100%;background:linear-gradient(90deg,#0ea5e9,#10b981)}
-  .pos{color:var(--pos)} .neg{color:var(--neg)}
-  .footer{color:#6b7280;font-size:12px;text-align:right;margin-top:24px}
-  .r-list{display:flex;flex-direction:column;gap:6px;line-height:1.4}
-  @media print{body{background:#fff;color:#000}.card{background:#fff;border-color:#ddd}}
-  `;
+  :root{
+  --bg:#0b1220;
+  --panel:#0f172a;
+  --text:#e2e8f0;
+  --muted:#94a3b8;
+  --pos:#10b981;
+  --neg:#f43f5e;
+  --ring: rgba(255,255,255,.10);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:linear-gradient(#0b1220,#0a1020);
+  color:var(--text);
+  font:14px/1.45 system-ui,Inter,Segoe UI,Roboto
+}
+.wrap{max-width:1024px;margin:0 auto;padding:24px}
+
+/* grid util */
+.grid{display:grid;gap:12px}
+.g-4{grid-template-columns:repeat(4,1fr);align-items:stretch}
+
+/* kartu/box seragam */
+.card{
+  background:rgba(15,23,42,.9);
+  border:1px solid var(--ring);
+  border-radius:12px;
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+  min-height:130px;
+}
+
+h1{font-size:22px;margin:0 0 8px}
+.muted{color:var(--muted)}
+.big{font-size:22px;font-weight:700;margin-top:4px}
+
+/* progress bar */
+.row{display:flex;gap:12px;align-items:center}
+.bar{height:8px;background:#0b7180;border-radius:2px;overflow:hidden;flex:1;border:1px solid var(--ring)}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,#0ea5e9,#10b981)}
+
+/* warna nilai */
+.pos{color:var(--pos)} 
+.neg{color:var(--neg)}
+
+.footer{color:#6b7280;font-size:12px;text-align:right;margin-top:24px}
+.r-list{display:flex;flex-direction:column;gap:6px;line-height:1.4}
+
+/* print mode */
+@media print{
+  body{background:#fff;color:#000}
+  .card{background:#fff;border-color:#ddd}
+}
+`;
   const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2});
   const sign = n => n>=0?'pos':'neg';
 
