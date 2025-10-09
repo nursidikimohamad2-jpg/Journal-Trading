@@ -1,5 +1,5 @@
 /* =========================
-   RR JOURNAL — APP.JS (UTUH + HYBRID SYMBOL + ΣR CONSISTENT + IMAGE JOURNAL)
+   RR JOURNAL — APP.JS (UTUH + Export Presentasi + Gambar)
    ========================= */
 
 /* ===== util DOM ===== */
@@ -34,15 +34,28 @@ const saveProjectNotes = $('#saveProjectNotes');
 const cancelSaveProject = $('#cancelSaveProject');
 const confirmSaveProject = $('#confirmSaveProject');
 
+/* ===== Edit Modal + Gambar ===== */
 const editModal = $('#editModal'), editForm = $('#editForm'), editCancel = $('#editCancel');
 
-/* Upload image elements (Edit) */
-const editBeforeFile = $('#editBeforeFile');
-const editAfterFile  = $('#editAfterFile');
-const editBeforePreview = $('#editBeforePreview');
-const editAfterPreview  = $('#editAfterPreview');
-const editClearBefore = $('#editClearBefore');
-const editClearAfter  = $('#editClearAfter');
+// upload controls (already exist in HTML)
+const editImgBefore = $('#editImgBefore');
+const editImgBeforeData = $('#editImgBeforeData');
+const editImgBeforePreview = $('#editImgBeforePreview');
+const btnClearImgBefore = $('#btnClearImgBefore');
+const btnViewImgBefore = $('#btnViewImgBefore');
+const dropBefore = $('#dropBefore');
+
+const editImgAfter = $('#editImgAfter');
+const editImgAfterData = $('#editImgAfterData');
+const editImgAfterPreview = $('#editImgAfterPreview');
+const btnClearImgAfter = $('#btnClearImgAfter');
+const btnViewImgAfter = $('#btnViewImgAfter');
+const dropAfter = $('#dropAfter');
+
+// Lightbox
+const imgViewer = $('#imgViewer');
+const imgViewerImg = $('#imgViewerImg');
+const imgViewerClose = $('#imgViewerClose');
 
 /* ===== storage keys ===== */
 const STORE       = 'rr_journal_active_v1';
@@ -67,7 +80,7 @@ const fmtMoney  = n => (isFinite(n) ? n.toLocaleString('id-ID',{minimumFractionD
 const slugify   = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'report';
 
 /* =========================================================
-   LIST SYMBOL + HYBRID (DATALIST)
+   LIST SYMBOL + DROPDOWN
    ========================================================= */
 const SYMBOLS = [
   "EURUSD","GBPUSD","AUDUSD","NZDUSD","USDJPY","USDCHF","USDCAD",
@@ -79,32 +92,61 @@ const SYMBOLS = [
   "XAUUSD","XAGUSD","US100"
 ];
 
-/* Hybrid datalist — FORM TAMBAH */
+/* Ganti input symbol → <select> pada form utama (tanpa edit index.html) */
 function ensureSymbolDropdownForAdd(){
   if (!form) return;
-  const input = form.querySelector('[name="symbol"]');
-  if (!input) return;
-  if (form.querySelector('datalist#symbolList')) return;
+  const old = form.querySelector('[name="symbol"]');
+  if (!old) return;
+  if (old.tagName.toLowerCase() === 'select') { populateSelectOptions(old, SYMBOLS); return; }
 
-  const dl = document.createElement('datalist');
-  dl.id = 'symbolList';
-  SYMBOLS.forEach(s => { const o=document.createElement('option'); o.value=s; dl.appendChild(o); });
-  input.setAttribute('list','symbolList');
-  form.appendChild(dl);
+  const sel = document.createElement('select');
+  sel.id = old.id || 'symbol'; sel.name = old.name || 'symbol';
+  sel.className = old.className; sel.required = true;
+
+  const ph = document.createElement('option');
+  ph.value = ''; ph.textContent = '-- pilih symbol --'; ph.disabled = true; ph.selected = true;
+  sel.appendChild(ph);
+
+  populateSelectOptions(sel, SYMBOLS);
+
+  const val = (old.value || '').toUpperCase().replace(/[^A-Z]/g,'');
+  if (val && SYMBOLS.includes(val)) sel.value = val;
+
+  old.replaceWith(sel);
 }
 
-/* Hybrid datalist — MODAL EDIT */
+/* Ganti input symbol → <select> pada modal edit */
 function ensureSymbolDropdownForEdit(){
   if (!editForm) return;
-  const input = editForm.querySelector('[name="symbol"]');
-  if (!input) return;
-  if (editForm.querySelector('datalist#symbolList')) return;
+  const old = editForm.querySelector('[name="symbol"]');
+  if (!old) return;
+  if (old.tagName.toLowerCase() === 'select') { populateSelectOptions(old, SYMBOLS); return; }
 
-  const dl = document.createElement('datalist');
-  dl.id = 'symbolList';
-  SYMBOLS.forEach(s => { const o=document.createElement('option'); o.value=s; dl.appendChild(o); });
-  input.setAttribute('list','symbolList');
-  editForm.appendChild(dl);
+  const sel = document.createElement('select');
+  sel.name = 'symbol'; sel.id = old.id || 'editSymbol';
+  sel.className = old.className; sel.required = true;
+
+  const ph = document.createElement('option');
+  ph.value=''; ph.textContent='-- pilih symbol --'; ph.disabled=true; ph.selected=true;
+  sel.appendChild(ph);
+
+  populateSelectOptions(sel, SYMBOLS);
+  const val = (old.value || '').toUpperCase().replace(/[^A-Z]/g,'');
+  if (val && SYMBOLS.includes(val)) sel.value = val;
+
+  old.replaceWith(sel);
+}
+
+function populateSelectOptions(selectEl, list){
+  selectEl.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value=''; ph.textContent='-- pilih symbol --'; ph.disabled=true; ph.selected=true;
+  selectEl.appendChild(ph);
+  for (const s of list){
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    selectEl.appendChild(opt);
+  }
 }
 
 /* =========================================================
@@ -116,10 +158,8 @@ function normalizeSymbol(s){
 function precisionForSymbol(symRaw){
   const s = normalizeSymbol(symRaw);
   if (!s) return 5;
-
   const MAP = { XAUUSD:2, XAGUSD:3, US100:1 };
   if (MAP[s] != null) return MAP[s];
-
   if (s.endsWith('JPY')) return 3;
   return 5;
 }
@@ -127,7 +167,7 @@ function stepForPrecision(p){ return Number(`1e-${p}`); }
 function roundTo(n, prec){ const f = Math.pow(10, prec); return Math.round(Number(n||0)*f)/f; }
 function toFixedBy(n, prec){ return Number.isFinite(n) ? Number(n).toFixed(prec) : (0).toFixed(prec); }
 
-/* Terapkan step & placeholder — FORM TAMBAH */
+/* Terapkan step & placeholder sesuai simbol — FORM TAMBAH */
 function applyPriceFormatToAddForm(){
   if(!form) return;
   const p = precisionForSymbol(form.symbol.value);
@@ -147,7 +187,7 @@ function applyPriceFormatToEditForm(){
   if(editForm.stop_loss){   editForm.stop_loss.step   = step; editForm.stop_loss.placeholder   = ph; }
 }
 
-/* ===== Active Project ===== */
+/* ===== Active Project Helpers ===== */
 function setActiveProject(id='', name=''){
   localStorage.setItem(ACTIVE_ID_KEY, id || '');
   localStorage.setItem(ACTIVE_NAME_KEY, name || '');
@@ -169,7 +209,7 @@ function updateActiveProjectUI(){
   }
 }
 
-/* ===== PREVIEW ===== */
+/* ===== PREVIEW (mengikuti presisi simbol) ===== */
 function calcPreview(entry, sl, side, _precFromSymbol){
   const ok = Number.isFinite(entry) && Number.isFinite(sl);
   const prec = (_precFromSymbol ?? precisionForSymbol(form?.symbol?.value || ''));
@@ -179,7 +219,6 @@ function calcPreview(entry, sl, side, _precFromSymbol){
     return;
   }
   const d = Math.abs(entry - sl);
-
   rPointEl.textContent = toFixedBy(roundTo(d, prec), prec);
 
   const tp1 = side==='LONG'? entry+d : entry-d;
@@ -216,35 +255,12 @@ function rCell(n){
   return `<span class="${c}">${String(n)}</span>`;
 }
 
-/* ===== Image helpers (Edit) ===== */
-function fileToDataURL(file){
-  return new Promise((resolve,reject)=>{
-    const fr = new FileReader();
-    fr.onload = e => resolve(e.target.result);
-    fr.onerror = reject;
-    fr.readAsDataURL(file);
-  });
-}
-function setPreview(imgEl, dataURL){
-  if (!imgEl) return;
-  if (dataURL){
-    imgEl.src = dataURL;
-    imgEl.style.display = 'block';
-  } else {
-    imgEl.removeAttribute('src');
-    imgEl.style.display = 'none';
-  }
-}
-let editBeforeDataURL = null;
-let editAfterDataURL  = null;
-
 /* ===== table row ===== */
 function rowHTML(t){
   const [r1,r2,r3] = rByResult(t.result||'');
   const prec = precisionForSymbol(t.symbol);
   const fmt  = v => toFixedBy(Number(v), prec);
   const symbolClean = normalizeSymbol(t.symbol);
-  const cam = (t.before_img || t.after_img) ? ' 📷' : '';
 
   const resultSel = `
     <select data-id="${t.id}" data-field="result"
@@ -272,7 +288,7 @@ function rowHTML(t){
     <td class="px-3 py-2 text-right">${rCell(r2)}</td>
     <td class="px-3 py-2 text-right">${rCell(r3)}</td>
     <td class="px-3 py-2 text-right">${resultSel}</td>
-    <td class="px-3 py-2 text-left">${(t.note || '')}${cam}</td>
+    <td class="px-3 py-2 text-left">${t.note || ''}</td>
     <td class="px-3 py-2">${buttons}</td>
   `;
 }
@@ -305,7 +321,7 @@ function refresh(){
   const pct = x => (nDone>0?Math.round(x/nDone*100):0)+'%';
   pBox1.textContent = pct(n1); pBox2.textContent = pct(n2); pBox3.textContent = pct(n3);
 
-  calcSim(rnet);
+  calcSim(rnet); // update simulasi balance
 }
 
 /* ===== CRUD data ===== */
@@ -316,9 +332,9 @@ function deleteTrade(id){ save(load().filter(x=>x.id!==id)); }
 /* ===== edit modal ===== */
 function openEdit(id){
   const t = load().find(x=>x.id===id); if(!t) return;
-
   ensureSymbolDropdownForEdit();
 
+  // isi form
   editForm.id.value = id;
   editForm.setup_date.value = toDTInput(t.setup_date || '');
   editForm.symbol.value = normalizeSymbol(t.symbol || '');
@@ -326,13 +342,9 @@ function openEdit(id){
   editForm.entry_price.value = t.entry_price ?? 0;
   editForm.stop_loss.value  = t.stop_loss  ?? 0;
 
-  // load image previews
-  editBeforeDataURL = t.before_img || null;
-  editAfterDataURL  = t.after_img  || null;
-  setPreview(editBeforePreview, editBeforeDataURL);
-  setPreview(editAfterPreview,  editAfterDataURL);
-  if (editBeforeFile) editBeforeFile.value = '';
-  if (editAfterFile)  editAfterFile.value  = '';
+  // gambar (base64)
+  setImagePreview('before', t.img_before_data || '');
+  setImagePreview('after',  t.img_after_data  || '');
 
   applyPriceFormatToEditForm();
   editModal.classList.remove('hidden'); editModal.classList.add('flex');
@@ -383,13 +395,12 @@ form?.addEventListener('input', ()=>{
   applyPriceFormatToAddForm();
 });
 form?.addEventListener('change', e=>{
-  if (e.target && (e.target.name === 'symbol')) applyPriceFormatToAddForm();
+  if (e.target && e.target.name === 'symbol') applyPriceFormatToAddForm();
 });
 
 /* validasi + tambah row  (TIDAK reset modal/risk) */
 form?.addEventListener('submit', e=>{
   e.preventDefault();
-
   const keepSettings = getSettings();
 
   const symbol = normalizeSymbol(form.symbol.value || '');
@@ -416,8 +427,9 @@ form?.addEventListener('submit', e=>{
     setup_date: form.setup_date.value || '',
     note: form.note.value || '',
     result: '',
-    before_img: null,
-    after_img:  null
+    // field lampiran default
+    img_before_data: '',
+    img_after_data: ''
   });
 
   form.reset();
@@ -445,22 +457,6 @@ tradeList.addEventListener('click', e=>{
   if(btn.dataset.action==='edit'){ openEdit(id); }
 });
 
-/* Upload image listeners */
-editBeforeFile?.addEventListener('change', async (e)=>{
-  const f = e.target.files?.[0];
-  if (f){ editBeforeDataURL = await fileToDataURL(f); setPreview(editBeforePreview, editBeforeDataURL); }
-});
-editAfterFile?.addEventListener('change', async (e)=>{
-  const f = e.target.files?.[0];
-  if (f){ editAfterDataURL = await fileToDataURL(f); setPreview(editAfterPreview, editAfterDataURL); }
-});
-editClearBefore?.addEventListener('click', ()=>{
-  editBeforeDataURL = null; setPreview(editBeforePreview, null); if (editBeforeFile) editBeforeFile.value='';
-});
-editClearAfter?.addEventListener('click', ()=>{
-  editAfterDataURL = null; setPreview(editAfterPreview, null); if (editAfterFile) editAfterFile.value='';
-});
-
 editCancel?.addEventListener('click', closeEdit);
 editForm?.symbol?.addEventListener('input', applyPriceFormatToEditForm);
 editForm?.addEventListener('change', e=>{
@@ -478,14 +474,15 @@ editForm?.addEventListener('submit', e=>{
     side: editForm.side.value,
     entry_price: roundTo(Number(editForm.entry_price.value)||0, prec),
     stop_loss:   roundTo(Number(editForm.stop_loss.value)||0,  prec),
-    before_img:  editBeforeDataURL ?? null,
-    after_img:   editAfterDataURL  ?? null
+    // simpan lampiran base64 yang tertampung di hidden input
+    img_before_data: (editImgBeforeData?.value || ''),
+    img_after_data:  (editImgAfterData?.value || '')
   });
   closeEdit(); refresh();
 });
 
 document.addEventListener('keydown', e=>{
-  if(e.key==='Escape'){ closeEdit(); closeProjectsModal(); closeSaveProjectModal(); }
+  if(e.key==='Escape'){ closeEdit(); closeProjectsModal(); closeSaveProjectModal(); closeLightbox(); }
 });
 
 /* ===== Export/Import/Clear ===== */
@@ -641,13 +638,12 @@ function calcSim(){
 })();
 
 /* =====================================================
-   EXPORT HTML (ringkasan + simulasi balance) — KONSISTEN DENGAN ΣR
+   EXPORT HTML (ringkasan + simulasi balance) — versi lama
    ===================================================== */
 
 function downloadTextFile(filename, text, mime = 'text/html') {
   try {
     const blob = new Blob([text], { type: mime });
-
     if (window.navigator && window.navigator.msSaveOrOpenBlob) {
       window.navigator.msSaveOrOpenBlob(blob, filename);
       return;
@@ -664,14 +660,12 @@ function downloadTextFile(filename, text, mime = 'text/html') {
   }
 }
 
-/* ===== hitung statistik + simulasi (Σ komponen) ===== */
+/* ===== hitung statistik + simulasi (dipakai kedua export) ===== */
 function computeStats(trades){
   let nDone=0,n1=0,n2=0,n3=0;
-  let r1=0,r2=0,r3=0;
+  let r1=0,r2=0,r3=0,rnet=0;
   const dates=[];
   const resultCounts = { SL:0, TP1:0, TP2:0, TP3:0 };
-
-  const seq = [];
 
   for (const t of trades){
     if (t.setup_date) dates.push(t.setup_date);
@@ -679,6 +673,7 @@ function computeStats(trades){
     const res = t.result || '';
     const [x1,x2,x3] = rByResult(res);
     r1 += x1; r2 += x2; r3 += x3;
+    rnet += netROf(res);
 
     const lvl = levelFromResult(res);
     if (lvl !== null){ nDone++; if(lvl>=1)n1++; if(lvl>=2)n2++; if(lvl>=3)n3++; }
@@ -687,12 +682,7 @@ function computeStats(trades){
     if (res==='TP1') resultCounts.TP1++;
     if (res==='TP2') resultCounts.TP2++;
     if (res==='TP3') resultCounts.TP3++;
-
-    const net = netROf(res);
-    if (net !== 0) seq.push(net);
   }
-
-  const rsumTotal = r1 + r2 + r3;
 
   const cumulativeWin = {
     ge_tp1: resultCounts.TP1 + resultCounts.TP2 + resultCounts.TP3,
@@ -712,10 +702,12 @@ function computeStats(trades){
   const { base, risk } = getSettings();
   const oneR = base * (risk/100);
 
-  const sim1   = { sumR:r1,        pnl: oneR*r1,        equity: base + oneR*r1 };
-  const sim2   = { sumR:r2,        pnl: oneR*r2,        equity: base + oneR*r2 };
-  const sim3   = { sumR:r3,        pnl: oneR*r3,        equity: base + oneR*r3 };
-  const simAll = { sumR:rsumTotal, pnl: oneR*rsumTotal, equity: base + oneR*rsumTotal };
+  const sim1   = { sumR:r1,             pnl: oneR*r1,             equity: base + oneR*r1 };
+  const sim2   = { sumR:r2,             pnl: oneR*r2,             equity: base + oneR*r2 };
+  const sim3   = { sumR:r3,             pnl: oneR*r3,             equity: base + oneR*r3 };
+  const simAll = { sumR:r1+r2+r3,       pnl: oneR*(r1+r2+r3),     equity: base + oneR*(r1+r2+r3) };
+
+  const seq = trades.map(t=>netROf(t.result||'')).filter(v=>v!==0);
 
   let curW=0,curL=0,maxW=0,maxL=0;
   for (const v of seq){
@@ -746,14 +738,14 @@ function computeStats(trades){
     total: trades.length,
     prob: { tp1:pct(n1,nDone), tp2:pct(n2,nDone), tp3:pct(n3,nDone) },
     rsum: { r1, r2, r3 },
-    rsumTotal,
-    rsumComponentsTotal: rsumTotal,
+    rsumTotal: rnet,
+    rsumComponentsTotal: r1 + r2 + r3,
     range: { min:minDate, max:maxDate },
     results: { counts: resultCounts, cumulative: cumulativeWin, wins, losses },
     sim: {
       base, risk, oneR,
-      pnl: oneR*rsumTotal,
-      equity: base + oneR*rsumTotal,
+      pnl: oneR*rnet,
+      equity: base + oneR*rnet,
       scenarios: { rr1:sim1, rr2:sim2, rr3:sim3, combined:simAll }
     },
     streak: {
@@ -766,7 +758,7 @@ function computeStats(trades){
   };
 }
 
-/* ===== template laporan HTML ===== */
+/* ===== template laporan HTML lama (tetap ada) ===== */
 function buildReportHTML({ projectName, createdAt, stats }) {
   const css = `
   :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--pos:#10b981;--neg:#f43f5e}
@@ -801,7 +793,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="muted">Dibuat: ${createdAt} • Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'}</div>
     </div>
 
-    <!-- Probabilitas -->
     <div class="grid g-4" style="margin-bottom:12px">
       <div class="card"><div class="muted">Jumlah Transaksi</div><div class="big">${stats.total}</div></div>
       <div class="card"><div class="muted">Prob ≥ TP1</div><div class="row"><div class="big">${stats.prob.tp1}%</div><div class="bar"><i style="width:${stats.prob.tp1}%"></i></div></div></div>
@@ -809,7 +800,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card"><div class="muted">Prob ≥ TP3</div><div class="row"><div class="big">${stats.prob.tp3}%</div><div class="bar"><i style="width:${stats.prob.tp3}%"></i></div></div></div>
     </div>
 
-    <!-- Ringkasan R -->
     <div class="grid g-4" style="margin-bottom:12px">
       <div class="card">
         <div class="muted">Total R (Final/Net)</div>
@@ -834,7 +824,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       </div>
     </div>
 
-    <!-- Skenario -->
     <div class="grid g-4" style="margin-bottom:12px">
       ${['rr1','rr2','rr3','combined'].map(k=>{
         const label={rr1:'TP1',rr2:'TP2',rr3:'TP3',combined:'Semua R'}[k];
@@ -848,7 +837,6 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       }).join('')}
     </div>
 
-    <!-- Hasil per Kategori + Risiko -->
     <div class="grid g-4">
       <div class="card">
         <div class="muted">Win (kumulatif ≥ TP)</div>
@@ -892,7 +880,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
   </div></body></html>`;
 }
 
-/* ===== handler tombol Export HTML ===== */
+/* ===== handler tombol Export HTML (lama) ===== */
 exportHtmlBtn?.addEventListener('click', () => {
   try {
     const trades=load();
@@ -913,6 +901,271 @@ exportHtmlBtn?.addEventListener('click', () => {
   }
 });
 
+/* =====================================================
+   EXPORT PRESENTASI (baru) — dengan gambar & card per trade
+   ===================================================== */
+
+// sisipkan tombol baru di UI (sebelah Export HTML lama)
+(function injectExportPresentasiButton(){
+  if (!exportHtmlBtn) return;
+  const btn = document.createElement('button');
+  btn.id = 'exportPresentBtn';
+  btn.className = 'bg-slate-900/70 ring-1 ring-white/10 px-3 py-1 rounded-lg';
+  btn.textContent = 'Export Presentasi';
+  exportHtmlBtn.insertAdjacentElement('afterend', btn);
+  btn.addEventListener('click', exportPresentationHTML);
+})();
+
+function exportPresentationHTML(){
+  try {
+    const trades = load();
+    const { name:activeName } = getActiveProject();
+    const projectName = activeName || 'Jurnal Aktif';
+    const stats = computeStats(trades);
+
+    const html = buildPresentationHTML({ projectName, createdAt: new Date().toLocaleString('id-ID'), trades, stats });
+    const fname=`rr-presentasi-${slugify(projectName)}.html`;
+    downloadTextFile(fname, html, 'text/html');
+  } catch (e){
+    console.error('Export Presentasi error:', e);
+    alert('Export Presentasi gagal: ' + (e?.message || e));
+  }
+}
+
+function buildPresentationHTML({ projectName, createdAt, trades, stats }){
+  const css = `
+  :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--ring:rgba(255,255,255,.08);--pos:#10b981;--neg:#f43f5e;--cyan:#22d3ee;--amber:#f59e0b}
+  *{box-sizing:border-box}
+  body{margin:0;background:#07111f;color:var(--text);font:14px/1.5 system-ui,Inter,Segoe UI,Roboto}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px}
+  h1{font-size:28px;margin:0 0 4px}
+  .muted{color:var(--muted)}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:16px 0 22px}
+  .card{background:rgba(15,23,42,.88);border:1px solid var(--ring);border-radius:12px;padding:14px;min-height:72px;display:flex;flex-direction:column;gap:6px}
+  .k{font-size:12px;color:var(--muted)} .v{font-size:18px;font-weight:700}
+  .pos{color:var(--pos)} .neg{color:var(--neg)}
+  .block{background:rgba(15,23,42,.88);border:1px solid var(--ring);border-radius:14px;padding:16px;margin:14px 0}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .thumb{background:#0b1628;border:1px solid var(--ring);height:260px;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .thumb>img{max-width:100%;max-height:100%;object-fit:contain}
+  .cap{font-size:12px;color:var(--muted);margin-top:6px}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:.2rem .55rem;border-radius:999px;border:1px solid var(--ring);font-size:12px}
+  .LONG{background:#032a3a;color:#aaf; border-color:#0ea5e9}
+  .SHORT{background:#3a1a1a;color:#ffd6d6;border-color:#f97316}
+  .TP1,.TP2,.TP3{background:rgba(16,185,129,.1);color:#a7f3d0;border-color:#10b981}
+  .SL{background:rgba(244,63,94,.1);color:#fecaca;border-color:#f43f5e}
+  table.meta{width:100%;border-collapse:separate;border-spacing:0 8px}
+  table.meta td{padding:8px 10px;border-radius:8px;background:#0c172a;border:1px solid var(--ring)}
+  table.meta td.k{width:25%;color:#9fb1c5}
+  table.meta td.v{text-align:right;font-weight:600}
+  .eval{background:#0c172a;border:1px solid var(--ring);border-radius:8px;padding:10px 12px;min-height:120px}
+  .head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .sym{font-size:18px;font-weight:700}
+  .time{font-size:12px;color:var(--muted)}
+  .flex{display:flex;gap:16px}
+  .grow{flex:1}
+  .right{text-align:right}
+  .sep{height:1px;background:var(--ring);margin:10px 0}
+  @media (max-width:900px){ .row{grid-template-columns:1fr} .cards{grid-template-columns:repeat(2,1fr)} }
+  @media print{ body{background:#fff;color:#000} .card,.block,.thumb,.eval{background:#fff;border-color:#ddd} }
+  `;
+  const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmt0 = n => (+n).toLocaleString('id-ID',{maximumFractionDigits:0});
+  const signClass = n => n>=0 ? 'pos' : 'neg';
+
+  const win = stats.results.wins;
+  const loss = stats.results.counts.SL;
+
+  const header = `
+    <div>
+      <h1>${projectName}</h1>
+      <div class="muted">Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'} • Disusun otomatis dari RR Journal</div>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="k">Transaksi</div><div class="v">${fmt0(stats.total)}</div></div>
+      <div class="card"><div class="k">Win / Loss</div><div class="v">${fmt0(win)} / ${fmt0(loss)}</div></div>
+      <div class="card"><div class="k">Total R (Net)</div><div class="v ${signClass(stats.rsumTotal)}">${stats.rsumTotal}</div></div>
+      <div class="card"><div class="k">1R (USD)</div><div class="v">$${fmt(stats.sim.oneR)}</div></div>
+      <div class="card"><div class="k">P/L (USD)</div><div class="v ${signClass(stats.sim.pnl)}">$${fmt(stats.sim.pnl)}</div></div>
+    </div>
+  `;
+
+  // running P/L & Equity
+  const oneR = stats.sim.oneR;
+  let runR = 0;
+  let runPnlUSD = 0;
+  let runEq = stats.sim.base;
+
+  // build trade cards
+  const tradeCards = (trades||[]).map(t=>{
+    const sym = normalizeSymbol(t.symbol);
+    const prec = precisionForSymbol(sym);
+    const entry = +t.entry_price || 0;
+    const sl    = +t.stop_loss || 0;
+    const d     = Math.abs(entry - sl);
+    const tp1   = t.side==='LONG'? entry+d   : entry-d;
+    const tp2   = t.side==='LONG'? entry+2*d : entry-2*d;
+    const tp3   = t.side==='LONG'? entry+3*d : entry-3*d;
+
+    const [r1,r2,r3] = rByResult(t.result||'');
+    const rnet = netROf(t.result||'');
+
+    // update running
+    runR += rnet;
+    runPnlUSD = runR * oneR;
+    runEq = stats.sim.base + runPnlUSD;
+
+    const imgBefore = t.img_before_data || '';
+    const imgAfter  = t.img_after_data  || '';
+
+    const price = v => toFixedBy(v, prec);
+
+    return `
+      <div class="block">
+        <div class="head">
+          <div class="sym">${sym}</div>
+          <span class="badge ${t.side}">${t.side}</span>
+          ${t.result ? `<span class="badge ${t.result}">${t.result}</span>` : ''}
+          <div class="time">• ${fmtDT(t.setup_date||'')}</div>
+        </div>
+
+        <div class="row">
+          <div>
+            <div class="thumb">${imgBefore ? `<img src="${imgBefore}" alt="Sebelum">` : `<svg width="100%" height="100%" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"><path d="M20,90 L140,130 L280,60 L420,170 L580,110" fill="none" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"/></svg>`}</div>
+            <div class="cap">Sebelum — (placeholder/chart atau gambar sebelum)</div>
+          </div>
+          <div>
+            <div class="thumb">${imgAfter ? `<img src="${imgAfter}" alt="Sesudah">` : `<svg width="100%" height="100%" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet"><path d="M20,140 L210,150 L360,160 L580,110" fill="none" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"/></svg>`}</div>
+            <div class="cap">Sesudah — (placeholder/chart atau gambar sesudah)</div>
+          </div>
+        </div>
+
+        <div class="flex" style="margin-top:12px">
+          <div class="grow">
+            <table class="meta">
+              <tr><td class="k">Entry</td><td class="v">${price(entry)}</td><td class="k">TP1 (harga)</td><td class="v">${price(tp1)}</td><td class="k">R1</td><td class="v ${r1===0?'':(r1>0?'pos':'neg')}">${r1}</td></tr>
+              <tr><td class="k">Stop Loss</td><td class="v">${price(sl)}</td><td class="k">TP2 (harga)</td><td class="v">${price(tp2)}</td><td class="k">R2</td><td class="v ${r2===0?'':(r2>0?'pos':'neg')}">${r2}</td></tr>
+              <tr><td class="k">Δ (Entry–SL)</td><td class="v">${price(d)}</td><td class="k">TP3 (harga)</td><td class="v">${price(tp3)}</td><td class="k">R3</td><td class="v ${r3===0?'':(r3>0?'pos':'neg')}">${r3}</td></tr>
+              <tr><td class="k">R (Net)</td><td class="v ${signClass(rnet)}">${rnet}</td><td class="k">Equity (sim)</td><td class="v">$${fmt(runEq)}</td><td class="k">P/L (sim)</td><td class="v ${signClass(runPnlUSD)}">${runPnlUSD>=0?'+':''}$${fmt(runPnlUSD)}</td></tr>
+            </table>
+          </div>
+          <div class="eval grow">
+            <div class="k" style="margin-bottom:6px">Evaluasi</div>
+            <div>${(t.note||'—').replace(/\n/g,'<br>')}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `<!doctype html>
+  <html lang="id"><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${projectName} — Presentasi</title>
+  <style>${css}</style></head>
+  <body><div class="wrap">
+    ${header}
+    ${tradeCards || ''}
+    <div class="muted" style="text-align:right;margin-top:10px">Dibuat: ${createdAt}</div>
+  </div></body></html>`;
+}
+
+/* =====================================================
+   Gambar: preview, drag & drop, lightbox
+   ===================================================== */
+
+const MAX_IMG_BYTES = 3 * 1024 * 1024; // ~3MB aman untuk localStorage, saranku <300KB ideal
+
+async function fileToBase64(file){
+  if (!file) return '';
+  if (file.size > MAX_IMG_BYTES){
+    alert('Ukuran gambar terlalu besar. Maksimal sekitar 2–3MB.');
+    return '';
+  }
+  return new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+
+function setImagePreview(kind, base64){
+  if (kind==='before'){
+    if (base64){
+      editImgBeforeData.value = base64;
+      editImgBeforePreview.src = base64;
+      editImgBeforePreview.classList.remove('hidden');
+      btnClearImgBefore.classList.remove('hidden');
+      btnViewImgBefore.classList.remove('hidden');
+    } else {
+      editImgBeforeData.value = '';
+      editImgBeforePreview.src = '';
+      editImgBeforePreview.classList.add('hidden');
+      btnClearImgBefore.classList.add('hidden');
+      btnViewImgBefore.classList.add('hidden');
+    }
+  } else {
+    if (base64){
+      editImgAfterData.value = base64;
+      editImgAfterPreview.src = base64;
+      editImgAfterPreview.classList.remove('hidden');
+      btnClearImgAfter.classList.remove('hidden');
+      btnViewImgAfter.classList.remove('hidden');
+    } else {
+      editImgAfterData.value = '';
+      editImgAfterPreview.src = '';
+      editImgAfterPreview.classList.add('hidden');
+      btnClearImgAfter.classList.add('hidden');
+      btnViewImgAfter.classList.add('hidden');
+    }
+  }
+}
+
+async function handlePickFile(inputEl, kind){
+  const file = inputEl.files?.[0];
+  if (!file) return;
+  const b64 = await fileToBase64(file);
+  if (b64) setImagePreview(kind, b64);
+  inputEl.value = '';
+}
+
+function setupDragDrop(areaEl, inputEl, kind){
+  if (!areaEl || !inputEl) return;
+  ['dragenter','dragover'].forEach(ev=> areaEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); areaEl.classList.add('drop-active'); }));
+  ['dragleave','dragend','drop'].forEach(ev=> areaEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); areaEl.classList.remove('drop-active'); }));
+  areaEl.addEventListener('drop', async e=>{
+    const file = e.dataTransfer?.files?.[0]; if (!file) return;
+    const b64 = await fileToBase64(file);
+    if (b64) setImagePreview(kind, b64);
+  });
+  areaEl.addEventListener('click', ()=> inputEl.click());
+}
+
+/* lightbox */
+function openLightbox(src){
+  if (!src) return;
+  imgViewerImg.src = src;
+  imgViewer.classList.remove('hidden'); imgViewer.classList.add('flex');
+}
+function closeLightbox(){
+  imgViewer.classList.add('hidden'); imgViewer.classList.remove('flex');
+  imgViewerImg.src = '';
+}
+
+editImgBefore?.addEventListener('change', ()=> handlePickFile(editImgBefore,'before'));
+editImgAfter?.addEventListener('change',  ()=> handlePickFile(editImgAfter,'after'));
+btnClearImgBefore?.addEventListener('click', ()=> setImagePreview('before',''));
+btnClearImgAfter?.addEventListener('click',  ()=> setImagePreview('after',''));
+btnViewImgBefore?.addEventListener('click',   ()=> openLightbox(editImgBeforeData.value));
+btnViewImgAfter?.addEventListener('click',    ()=> openLightbox(editImgAfterData.value));
+imgViewerClose?.addEventListener('click', closeLightbox);
+imgViewer?.addEventListener('click', e=>{ if(e.target===imgViewer) closeLightbox(); });
+
+// drag-n-drop on labels
+setupDragDrop(dropBefore, editImgBefore, 'before');
+setupDragDrop(dropAfter,  editImgAfter,  'after');
+
 /* ===== Init ===== */
 (function init(){
   ensureSymbolDropdownForAdd();
@@ -925,7 +1178,6 @@ exportHtmlBtn?.addEventListener('click', () => {
   riskInput?.addEventListener('input', ()=> calcSim());
 
   applyPriceFormatToAddForm();
-
   refresh();
   updateActiveProjectUI();
   calcSim();
