@@ -1,5 +1,5 @@
 /* =========================
-   RR JOURNAL — APP.JS (UTUH + HYBRID SYMBOL)
+   RR JOURNAL — APP.JS (UTUH + HYBRID SYMBOL + FIX TOTAL R)
    ========================= */
 
 /* ===== util DOM ===== */
@@ -71,7 +71,7 @@ const SYMBOLS = [
   "XAUUSD","XAGUSD","US100"
 ];
 
-/* Ubah input symbol menjadi hybrid: <input list="symbolList"> (bisa pilih & bisa ngetik) — FORM TAMBAH */
+/* Hybrid datalist — FORM TAMBAH */
 function ensureSymbolDropdownForAdd(){
   if (!form) return;
   const input = form.querySelector('[name="symbol"]');
@@ -85,7 +85,7 @@ function ensureSymbolDropdownForAdd(){
   form.appendChild(dl);
 }
 
-/* Hybrid symbol di MODAL EDIT */
+/* Hybrid datalist — MODAL EDIT */
 function ensureSymbolDropdownForEdit(){
   if (!editForm) return;
   const input = editForm.querySelector('[name="symbol"]');
@@ -109,18 +109,17 @@ function precisionForSymbol(symRaw){
   const s = normalizeSymbol(symRaw);
   if (!s) return 5;
 
-  // mapping khusus (sesuai acuan)
   const MAP = { XAUUSD:2, XAGUSD:3, US100:1 };
   if (MAP[s] != null) return MAP[s];
 
-  if (s.endsWith('JPY')) return 3; // semua pair quote JPY
-  return 5;                        // mayor default
+  if (s.endsWith('JPY')) return 3;
+  return 5;
 }
 function stepForPrecision(p){ return Number(`1e-${p}`); }
 function roundTo(n, prec){ const f = Math.pow(10, prec); return Math.round(Number(n||0)*f)/f; }
 function toFixedBy(n, prec){ return Number.isFinite(n) ? Number(n).toFixed(prec) : (0).toFixed(prec); }
 
-/* Terapkan step & placeholder sesuai simbol — FORM TAMBAH */
+/* Terapkan step & placeholder — FORM TAMBAH */
 function applyPriceFormatToAddForm(){
   if(!form) return;
   const p = precisionForSymbol(form.symbol.value);
@@ -140,7 +139,7 @@ function applyPriceFormatToEditForm(){
   if(editForm.stop_loss){   editForm.stop_loss.step   = step; editForm.stop_loss.placeholder   = ph; }
 }
 
-/* ===== Active Project Helpers ===== */
+/* ===== Active Project ===== */
 function setActiveProject(id='', name=''){
   localStorage.setItem(ACTIVE_ID_KEY, id || '');
   localStorage.setItem(ACTIVE_NAME_KEY, name || '');
@@ -162,7 +161,7 @@ function updateActiveProjectUI(){
   }
 }
 
-/* ===== PREVIEW (mengikuti presisi simbol) ===== */
+/* ===== PREVIEW ===== */
 function calcPreview(entry, sl, side, _precFromSymbol){
   const ok = Number.isFinite(entry) && Number.isFinite(sl);
   const prec = (_precFromSymbol ?? precisionForSymbol(form?.symbol?.value || ''));
@@ -275,7 +274,7 @@ function refresh(){
   const pct = x => (nDone>0?Math.round(x/nDone*100):0)+'%';
   pBox1.textContent = pct(n1); pBox2.textContent = pct(n2); pBox3.textContent = pct(n3);
 
-  calcSim(rnet); // update simulasi balance
+  calcSim(rnet); // (rnet tidak dipakai di calcSim; aman)
 }
 
 /* ===== CRUD data ===== */
@@ -287,7 +286,6 @@ function deleteTrade(id){ save(load().filter(x=>x.id!==id)); }
 function openEdit(id){
   const t = load().find(x=>x.id===id); if(!t) return;
 
-  // hybrid list sebelum isi value
   ensureSymbolDropdownForEdit();
 
   editForm.id.value = id;
@@ -589,12 +587,13 @@ function calcSim(){
 })();
 
 /* =====================================================
-   EXPORT HTML (ringkasan + simulasi balance) — TEMPLATE LENGKAP
+   EXPORT HTML (ringkasan + simulasi balance) — KONSISTEN DENGAN ΣR
    ===================================================== */
 
 function downloadTextFile(filename, text, mime = 'text/html') {
   try {
     const blob = new Blob([text], { type: mime });
+
     if (window.navigator && window.navigator.msSaveOrOpenBlob) {
       window.navigator.msSaveOrOpenBlob(blob, filename);
       return;
@@ -611,12 +610,15 @@ function downloadTextFile(filename, text, mime = 'text/html') {
   }
 }
 
-/* ===== hitung statistik + simulasi ===== */
+/* ===== hitung statistik + simulasi (FIX: pakai Σ komponen) ===== */
 function computeStats(trades){
   let nDone=0,n1=0,n2=0,n3=0;
-  let r1=0,r2=0,r3=0,rnet=0;
+  let r1=0,r2=0,r3=0;
   const dates=[];
   const resultCounts = { SL:0, TP1:0, TP2:0, TP3:0 };
+
+  // urutan hasil aktual → untuk streak & DD
+  const seq = [];
 
   for (const t of trades){
     if (t.setup_date) dates.push(t.setup_date);
@@ -624,7 +626,6 @@ function computeStats(trades){
     const res = t.result || '';
     const [x1,x2,x3] = rByResult(res);
     r1 += x1; r2 += x2; r3 += x3;
-    rnet += netROf(res);
 
     const lvl = levelFromResult(res);
     if (lvl !== null){ nDone++; if(lvl>=1)n1++; if(lvl>=2)n2++; if(lvl>=3)n3++; }
@@ -633,7 +634,12 @@ function computeStats(trades){
     if (res==='TP1') resultCounts.TP1++;
     if (res==='TP2') resultCounts.TP2++;
     if (res==='TP3') resultCounts.TP3++;
+
+    const net = netROf(res);
+    if (net !== 0) seq.push(net);
   }
+
+  const rsumTotal = r1 + r2 + r3;      // <<— FINAL R pakai Σ komponen (konsisten dengan footer & sim)
 
   const cumulativeWin = {
     ge_tp1: resultCounts.TP1 + resultCounts.TP2 + resultCounts.TP3,
@@ -653,13 +659,13 @@ function computeStats(trades){
   const { base, risk } = getSettings();
   const oneR = base * (risk/100);
 
+  // Simulasi berbasis Σ komponen (bukan netROf)
   const sim1   = { sumR:r1,             pnl: oneR*r1,             equity: base + oneR*r1 };
   const sim2   = { sumR:r2,             pnl: oneR*r2,             equity: base + oneR*r2 };
   const sim3   = { sumR:r3,             pnl: oneR*r3,             equity: base + oneR*r3 };
-  const simAll = { sumR:r1+r2+r3,       pnl: oneR*(r1+r2+r3),     equity: base + oneR*(r1+r2+r3) };
+  const simAll = { sumR:rsumTotal,      pnl: oneR*rsumTotal,      equity: base + oneR*rsumTotal };
 
-  const seq = trades.map(t=>netROf(t.result||'')).filter(v=>v!==0);
-
+  // Streak & drawdown pakai urutan netROf (tetap)
   let curW=0,curL=0,maxW=0,maxL=0;
   for (const v of seq){
     if (v>0){ curW++; if(curW>maxW)maxW=curW; curL=0; }
@@ -668,7 +674,7 @@ function computeStats(trades){
 
   let equity=base, peak=base, maxDD=0, minEq=base, maxEq=base;
   for (const v of seq){
-    equity += oneR*v;
+    equity += oneR*v;            // untuk DD kita boleh pakai netROf
     peak = Math.max(peak, equity);
     maxDD = Math.max(maxDD, peak - equity);
     minEq = Math.min(minEq, equity);
@@ -689,22 +695,26 @@ function computeStats(trades){
     total: trades.length,
     prob: { tp1:pct(n1,nDone), tp2:pct(n2,nDone), tp3:pct(n3,nDone) },
     rsum: { r1, r2, r3 },
-    rsumTotal: rnet,
-    rsumComponentsTotal: r1 + r2 + r3,
+    rsumTotal,                        // <<— sekarang mengikuti Σ komponen
+    rsumComponentsTotal: rsumTotal,   // tetap disediakan (sama nilainya)
     range: { min:minDate, max:maxDate },
+
     results: { counts: resultCounts, cumulative: cumulativeWin, wins, losses },
+
     sim: {
       base, risk, oneR,
-      pnl: oneR*rnet,
-      equity: base + oneR*rnet,
+      pnl: oneR*rsumTotal,            // <<— konsisten dengan Σ komponen
+      equity: base + oneR*rsumTotal,  // <<— konsisten dengan Σ komponen
       scenarios: { rr1:sim1, rr2:sim2, rr3:sim3, combined:simAll }
     },
+
     streak: {
       maxConsecWin: maxW,
       maxConsecLoss: maxL,
       maxConsecProfitR: maxProfitR,
       maxConsecProfitUSD: oneR*maxProfitR
     },
+
     drawdown: { maxAbs:maxDD, maxPct:ddPct, minEquity:minEq, maxEquity:maxEq }
   };
 }
@@ -867,7 +877,6 @@ exportHtmlBtn?.addEventListener('click', () => {
   baseInput?.addEventListener('input', ()=> calcSim());
   riskInput?.addEventListener('input', ()=> calcSim());
 
-  // Terapkan format awal sesuai simbol (kalau sudah terisi)
   applyPriceFormatToAddForm();
 
   refresh();
