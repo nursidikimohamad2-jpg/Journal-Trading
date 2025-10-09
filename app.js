@@ -1,5 +1,5 @@
 /* =========================
-   RR JOURNAL — APP.JS (UTUH)
+   RR JOURNAL — APP.JS (UTUH + HYBRID SYMBOL + ΣR CONSISTENT + IMAGE JOURNAL)
    ========================= */
 
 /* ===== util DOM ===== */
@@ -34,26 +34,15 @@ const saveProjectNotes = $('#saveProjectNotes');
 const cancelSaveProject = $('#cancelSaveProject');
 const confirmSaveProject = $('#confirmSaveProject');
 
-/* ===== Edit Modal & Image Controls ===== */
 const editModal = $('#editModal'), editForm = $('#editForm'), editCancel = $('#editCancel');
 
-const editImgBefore = $('#editImgBefore');
-const editImgAfter  = $('#editImgAfter');
-const editImgBeforeData = $('#editImgBeforeData');
-const editImgAfterData  = $('#editImgAfterData');
-const editImgBeforePreview = $('#editImgBeforePreview');
-const editImgAfterPreview  = $('#editImgAfterPreview');
-const btnClearImgBefore = $('#btnClearImgBefore');
-const btnClearImgAfter  = $('#btnClearImgAfter');
-const btnViewImgBefore  = $('#btnViewImgBefore');
-const btnViewImgAfter   = $('#btnViewImgAfter');
-const dropBefore = $('#dropBefore');
-const dropAfter  = $('#dropAfter');
-
-/* ===== Lightbox ===== */
-const imgViewer = $('#imgViewer');
-const imgViewerImg = $('#imgViewerImg');
-const imgViewerClose = $('#imgViewerClose');
+/* Upload image elements (Edit) */
+const editBeforeFile = $('#editBeforeFile');
+const editAfterFile  = $('#editAfterFile');
+const editBeforePreview = $('#editBeforePreview');
+const editAfterPreview  = $('#editAfterPreview');
+const editClearBefore = $('#editClearBefore');
+const editClearAfter  = $('#editClearAfter');
 
 /* ===== storage keys ===== */
 const STORE       = 'rr_journal_active_v1';
@@ -63,7 +52,7 @@ const ACTIVE_NAME_KEY = 'rr_active_project_name';
 const STORE_SETTINGS  = 'rr_journal_settings_v1'; // { base, risk }
 
 /* ===== storage helpers ===== */
-const load       = () => { try { return JSON.parse(localStorage.getItem(STORE) || '[]'); } catch { return []; } };
+const load       = () => JSON.parse(localStorage.getItem(STORE) || '[]');
 const save       = d  => localStorage.setItem(STORE, JSON.stringify(d));
 const loadProj   = () => { try { return JSON.parse(localStorage.getItem(STORE_PROJ) || '[]'); } catch { localStorage.removeItem(STORE_PROJ); return []; } };
 const saveProj   = p  => localStorage.setItem(STORE_PROJ, JSON.stringify(p));
@@ -78,7 +67,7 @@ const fmtMoney  = n => (isFinite(n) ? n.toLocaleString('id-ID',{minimumFractionD
 const slugify   = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'report';
 
 /* =========================================================
-   LIST SYMBOL + DROPDOWN
+   LIST SYMBOL + HYBRID (DATALIST)
    ========================================================= */
 const SYMBOLS = [
   "EURUSD","GBPUSD","AUDUSD","NZDUSD","USDJPY","USDCHF","USDCAD",
@@ -90,61 +79,32 @@ const SYMBOLS = [
   "XAUUSD","XAGUSD","US100"
 ];
 
-/* Ganti input symbol → <select> pada form utama (tanpa edit index.html) */
+/* Hybrid datalist — FORM TAMBAH */
 function ensureSymbolDropdownForAdd(){
   if (!form) return;
-  const old = form.querySelector('[name="symbol"]');
-  if (!old) return;
-  if (old.tagName.toLowerCase() === 'select') { populateSelectOptions(old, SYMBOLS); return; }
+  const input = form.querySelector('[name="symbol"]');
+  if (!input) return;
+  if (form.querySelector('datalist#symbolList')) return;
 
-  const sel = document.createElement('select');
-  sel.id = old.id || 'symbol'; sel.name = old.name || 'symbol';
-  sel.className = old.className; sel.required = true;
-
-  const ph = document.createElement('option');
-  ph.value = ''; ph.textContent = '-- pilih symbol --'; ph.disabled = true; ph.selected = true;
-  sel.appendChild(ph);
-
-  populateSelectOptions(sel, SYMBOLS);
-
-  const val = (old.value || '').toUpperCase().replace(/[^A-Z]/g,'');
-  if (val && SYMBOLS.includes(val)) sel.value = val;
-
-  old.replaceWith(sel);
+  const dl = document.createElement('datalist');
+  dl.id = 'symbolList';
+  SYMBOLS.forEach(s => { const o=document.createElement('option'); o.value=s; dl.appendChild(o); });
+  input.setAttribute('list','symbolList');
+  form.appendChild(dl);
 }
 
-/* Ganti input symbol → <select> pada modal edit */
+/* Hybrid datalist — MODAL EDIT */
 function ensureSymbolDropdownForEdit(){
   if (!editForm) return;
-  const old = editForm.querySelector('[name="symbol"]');
-  if (!old) return;
-  if (old.tagName.toLowerCase() === 'select') { populateSelectOptions(old, SYMBOLS); return; }
+  const input = editForm.querySelector('[name="symbol"]');
+  if (!input) return;
+  if (editForm.querySelector('datalist#symbolList')) return;
 
-  const sel = document.createElement('select');
-  sel.name = 'symbol'; sel.id = old.id || 'editSymbol';
-  sel.className = old.className; sel.required = true;
-
-  const ph = document.createElement('option');
-  ph.value=''; ph.textContent='-- pilih symbol --'; ph.disabled=true; ph.selected=true;
-  sel.appendChild(ph);
-
-  populateSelectOptions(sel, SYMBOLS);
-  const val = (old.value || '').toUpperCase().replace(/[^A-Z]/g,'');
-  if (val && SYMBOLS.includes(val)) sel.value = val;
-
-  old.replaceWith(sel);
-}
-
-function populateSelectOptions(selectEl, list){
-  selectEl.innerHTML = '';
-  const ph = document.createElement('option');
-  ph.value=''; ph.textContent='-- pilih symbol --'; ph.disabled=true; ph.selected=true;
-  selectEl.appendChild(ph);
-  for (const s of list){
-    const opt = document.createElement('option');
-    opt.value = s; opt.textContent = s;
-    selectEl.appendChild(opt);
-  }
+  const dl = document.createElement('datalist');
+  dl.id = 'symbolList';
+  SYMBOLS.forEach(s => { const o=document.createElement('option'); o.value=s; dl.appendChild(o); });
+  input.setAttribute('list','symbolList');
+  editForm.appendChild(dl);
 }
 
 /* =========================================================
@@ -157,18 +117,17 @@ function precisionForSymbol(symRaw){
   const s = normalizeSymbol(symRaw);
   if (!s) return 5;
 
-  // mapping khusus
   const MAP = { XAUUSD:2, XAGUSD:3, US100:1 };
   if (MAP[s] != null) return MAP[s];
 
-  if (s.endsWith('JPY')) return 3; // semua pair quote JPY
-  return 5;                        // mayor default
+  if (s.endsWith('JPY')) return 3;
+  return 5;
 }
 function stepForPrecision(p){ return Number(`1e-${p}`); }
 function roundTo(n, prec){ const f = Math.pow(10, prec); return Math.round(Number(n||0)*f)/f; }
 function toFixedBy(n, prec){ return Number.isFinite(n) ? Number(n).toFixed(prec) : (0).toFixed(prec); }
 
-/* Terapkan step & placeholder sesuai simbol — FORM TAMBAH */
+/* Terapkan step & placeholder — FORM TAMBAH */
 function applyPriceFormatToAddForm(){
   if(!form) return;
   const p = precisionForSymbol(form.symbol.value);
@@ -188,7 +147,29 @@ function applyPriceFormatToEditForm(){
   if(editForm.stop_loss){   editForm.stop_loss.step   = step; editForm.stop_loss.placeholder   = ph; }
 }
 
-/* ===== preview (mengikuti presisi simbol) ===== */
+/* ===== Active Project ===== */
+function setActiveProject(id='', name=''){
+  localStorage.setItem(ACTIVE_ID_KEY, id || '');
+  localStorage.setItem(ACTIVE_NAME_KEY, name || '');
+  updateActiveProjectUI();
+}
+function getActiveProject(){
+  return {
+    id:   localStorage.getItem(ACTIVE_ID_KEY)   || '',
+    name: localStorage.getItem(ACTIVE_NAME_KEY) || ''
+  };
+}
+function updateActiveProjectUI(){
+  const { id, name } = getActiveProject();
+  if (id) {
+    saveToActiveBtn?.classList.remove('hidden');
+    if (saveToActiveBtn) saveToActiveBtn.textContent = `Simpan (${name})`;
+  } else {
+    saveToActiveBtn?.classList.add('hidden');
+  }
+}
+
+/* ===== PREVIEW ===== */
 function calcPreview(entry, sl, side, _precFromSymbol){
   const ok = Number.isFinite(entry) && Number.isFinite(sl);
   const prec = (_precFromSymbol ?? precisionForSymbol(form?.symbol?.value || ''));
@@ -235,15 +216,35 @@ function rCell(n){
   return `<span class="${c}">${String(n)}</span>`;
 }
 
+/* ===== Image helpers (Edit) ===== */
+function fileToDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = e => resolve(e.target.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+function setPreview(imgEl, dataURL){
+  if (!imgEl) return;
+  if (dataURL){
+    imgEl.src = dataURL;
+    imgEl.style.display = 'block';
+  } else {
+    imgEl.removeAttribute('src');
+    imgEl.style.display = 'none';
+  }
+}
+let editBeforeDataURL = null;
+let editAfterDataURL  = null;
+
 /* ===== table row ===== */
 function rowHTML(t){
   const [r1,r2,r3] = rByResult(t.result||'');
   const prec = precisionForSymbol(t.symbol);
   const fmt  = v => toFixedBy(Number(v), prec);
   const symbolClean = normalizeSymbol(t.symbol);
-
-  const hasAttach = !!(t.img_before_data || t.img_after_data);
-  const attachIcon = hasAttach ? `<span title="Ada lampiran" class="inline-block align-middle ml-1 text-xs">📎</span>` : '';
+  const cam = (t.before_img || t.after_img) ? ' 📷' : '';
 
   const resultSel = `
     <select data-id="${t.id}" data-field="result"
@@ -254,7 +255,6 @@ function rowHTML(t){
       <option value="TP2"${t.result==='TP2'?'selected':''}>TP2</option>
       <option value="TP3"${t.result==='TP3'?'selected':''}>TP3</option>
     </select>`;
-
   const buttons = `
     <div class="flex items-center gap-2 justify-center">
       <button data-id="${t.id}" data-action="edit"
@@ -262,10 +262,9 @@ function rowHTML(t){
       <button data-id="${t.id}" data-action="del"
         class="bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1 hover:bg-rose-600 hover:text-white" title="Hapus">🗑</button>
     </div>`;
-
   return `
     <td class="px-3 py-2">${fmtDT(t.setup_date||'')}</td>
-    <td class="px-3 py-2">${symbolClean}${attachIcon}</td>
+    <td class="px-3 py-2">${symbolClean}</td>
     <td class="px-3 py-2 text-center">${t.side}</td>
     <td class="px-3 py-2 text-right">${fmt(t.entry_price)}</td>
     <td class="px-3 py-2 text-right">${fmt(t.stop_loss)}</td>
@@ -273,7 +272,7 @@ function rowHTML(t){
     <td class="px-3 py-2 text-right">${rCell(r2)}</td>
     <td class="px-3 py-2 text-right">${rCell(r3)}</td>
     <td class="px-3 py-2 text-right">${resultSel}</td>
-    <td class="px-3 py-2 text-left">${t.note || ''}</td>
+    <td class="px-3 py-2 text-left">${(t.note || '')}${cam}</td>
     <td class="px-3 py-2">${buttons}</td>
   `;
 }
@@ -306,7 +305,7 @@ function refresh(){
   const pct = x => (nDone>0?Math.round(x/nDone*100):0)+'%';
   pBox1.textContent = pct(n1); pBox2.textContent = pct(n2); pBox3.textContent = pct(n3);
 
-  calcSim(); // update simulasi balance
+  calcSim(rnet);
 }
 
 /* ===== CRUD data ===== */
@@ -327,9 +326,13 @@ function openEdit(id){
   editForm.entry_price.value = t.entry_price ?? 0;
   editForm.stop_loss.value  = t.stop_loss  ?? 0;
 
-  // Lampiran gambar -> isi & preview
-  setImagePreview('before', t.img_before_data || '');
-  setImagePreview('after',  t.img_after_data  || '');
+  // load image previews
+  editBeforeDataURL = t.before_img || null;
+  editAfterDataURL  = t.after_img  || null;
+  setPreview(editBeforePreview, editBeforeDataURL);
+  setPreview(editAfterPreview,  editAfterDataURL);
+  if (editBeforeFile) editBeforeFile.value = '';
+  if (editAfterFile)  editAfterFile.value  = '';
 
   applyPriceFormatToEditForm();
   editModal.classList.remove('hidden'); editModal.classList.add('flex');
@@ -380,14 +383,13 @@ form?.addEventListener('input', ()=>{
   applyPriceFormatToAddForm();
 });
 form?.addEventListener('change', e=>{
-  if (e.target && e.target.name === 'symbol') applyPriceFormatToAddForm();
+  if (e.target && (e.target.name === 'symbol')) applyPriceFormatToAddForm();
 });
 
 /* validasi + tambah row  (TIDAK reset modal/risk) */
 form?.addEventListener('submit', e=>{
   e.preventDefault();
 
-  // simpan nilai modal/risk sekarang agar tidak ikut ke-reset
   const keepSettings = getSettings();
 
   const symbol = normalizeSymbol(form.symbol.value || '');
@@ -414,17 +416,13 @@ form?.addEventListener('submit', e=>{
     setup_date: form.setup_date.value || '',
     note: form.note.value || '',
     result: '',
-    img_before_data: '', // default kosong
-    img_after_data : ''
+    before_img: null,
+    after_img:  null
   });
 
-  // reset hanya field trade
   form.reset();
-
-  // kembalikan modal/risk (project berjalan)
   setSettings(keepSettings);
-  calcSim(); // recompute 1R & P/L
-
+  calcSim();
   rPointEl.textContent = tp1El.textContent = tp2El.textContent = tp3El.textContent = '0.00';
   refresh();
 });
@@ -438,16 +436,29 @@ form?.addEventListener('reset', ()=>{
 /* ===== events: TABLE & EDIT ===== */
 tradeList.addEventListener('change', e=>{
   const sel = e.target.closest('select[data-id]');
-  if(sel){
-    updateTrade(sel.dataset.id, { [sel.dataset.field||'result']: sel.value });
-    refresh();
-  }
+  if(sel){ updateTrade(sel.dataset.id, { [sel.dataset.field||'result']: sel.value }); refresh(); }
 });
 tradeList.addEventListener('click', e=>{
   const btn = e.target.closest('button[data-action]'); if(!btn) return;
   const id = btn.dataset.id;
   if(btn.dataset.action==='del'){ deleteTrade(id); refresh(); }
   if(btn.dataset.action==='edit'){ openEdit(id); }
+});
+
+/* Upload image listeners */
+editBeforeFile?.addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0];
+  if (f){ editBeforeDataURL = await fileToDataURL(f); setPreview(editBeforePreview, editBeforeDataURL); }
+});
+editAfterFile?.addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0];
+  if (f){ editAfterDataURL = await fileToDataURL(f); setPreview(editAfterPreview, editAfterDataURL); }
+});
+editClearBefore?.addEventListener('click', ()=>{
+  editBeforeDataURL = null; setPreview(editBeforePreview, null); if (editBeforeFile) editBeforeFile.value='';
+});
+editClearAfter?.addEventListener('click', ()=>{
+  editAfterDataURL = null; setPreview(editAfterPreview, null); if (editAfterFile) editAfterFile.value='';
 });
 
 editCancel?.addEventListener('click', closeEdit);
@@ -467,14 +478,14 @@ editForm?.addEventListener('submit', e=>{
     side: editForm.side.value,
     entry_price: roundTo(Number(editForm.entry_price.value)||0, prec),
     stop_loss:   roundTo(Number(editForm.stop_loss.value)||0,  prec),
-    img_before_data: (editImgBeforeData?.value || ''),
-    img_after_data : (editImgAfterData?.value  || '')
+    before_img:  editBeforeDataURL ?? null,
+    after_img:   editAfterDataURL  ?? null
   });
   closeEdit(); refresh();
 });
 
 document.addEventListener('keydown', e=>{
-  if(e.key==='Escape'){ closeEdit(); closeProjectsModal(); closeSaveProjectModal(); closeViewer(); }
+  if(e.key==='Escape'){ closeEdit(); closeProjectsModal(); closeSaveProjectModal(); }
 });
 
 /* ===== Export/Import/Clear ===== */
@@ -570,28 +581,6 @@ projectsList?.addEventListener('click', e=>{
   }
 });
 
-/* ===== Active Project Helpers ===== */
-function setActiveProject(id='', name=''){
-  localStorage.setItem(ACTIVE_ID_KEY, id || '');
-  localStorage.setItem(ACTIVE_NAME_KEY, name || '');
-  updateActiveProjectUI();
-}
-function getActiveProject(){
-  return {
-    id:   localStorage.getItem(ACTIVE_ID_KEY)   || '',
-    name: localStorage.getItem(ACTIVE_NAME_KEY) || ''
-  };
-}
-function updateActiveProjectUI(){
-  const { id, name } = getActiveProject();
-  if (id) {
-    saveToActiveBtn?.classList.remove('hidden');
-    if (saveToActiveBtn) saveToActiveBtn.textContent = `Simpan (${name})`;
-  } else {
-    saveToActiveBtn?.classList.add('hidden');
-  }
-}
-
 /* ===== Simulasi Balance ===== */
 function getSettings(){
   return {
@@ -652,12 +641,13 @@ function calcSim(){
 })();
 
 /* =====================================================
-   EXPORT HTML (ringkasan + simulasi balance)
+   EXPORT HTML (ringkasan + simulasi balance) — KONSISTEN DENGAN ΣR
    ===================================================== */
 
 function downloadTextFile(filename, text, mime = 'text/html') {
   try {
     const blob = new Blob([text], { type: mime });
+
     if (window.navigator && window.navigator.msSaveOrOpenBlob) {
       window.navigator.msSaveOrOpenBlob(blob, filename);
       return;
@@ -674,12 +664,14 @@ function downloadTextFile(filename, text, mime = 'text/html') {
   }
 }
 
-/* ===== hitung statistik + simulasi ===== */
+/* ===== hitung statistik + simulasi (Σ komponen) ===== */
 function computeStats(trades){
   let nDone=0,n1=0,n2=0,n3=0;
-  let r1=0,r2=0,r3=0,rnet=0;
+  let r1=0,r2=0,r3=0;
   const dates=[];
   const resultCounts = { SL:0, TP1:0, TP2:0, TP3:0 };
+
+  const seq = [];
 
   for (const t of trades){
     if (t.setup_date) dates.push(t.setup_date);
@@ -687,7 +679,6 @@ function computeStats(trades){
     const res = t.result || '';
     const [x1,x2,x3] = rByResult(res);
     r1 += x1; r2 += x2; r3 += x3;
-    rnet += netROf(res);
 
     const lvl = levelFromResult(res);
     if (lvl !== null){ nDone++; if(lvl>=1)n1++; if(lvl>=2)n2++; if(lvl>=3)n3++; }
@@ -696,7 +687,12 @@ function computeStats(trades){
     if (res==='TP1') resultCounts.TP1++;
     if (res==='TP2') resultCounts.TP2++;
     if (res==='TP3') resultCounts.TP3++;
+
+    const net = netROf(res);
+    if (net !== 0) seq.push(net);
   }
+
+  const rsumTotal = r1 + r2 + r3;
 
   const cumulativeWin = {
     ge_tp1: resultCounts.TP1 + resultCounts.TP2 + resultCounts.TP3,
@@ -716,12 +712,10 @@ function computeStats(trades){
   const { base, risk } = getSettings();
   const oneR = base * (risk/100);
 
-  const sim1   = { sumR:r1,             pnl: oneR*r1,             equity: base + oneR*r1 };
-  const sim2   = { sumR:r2,             pnl: oneR*r2,             equity: base + oneR*r2 };
-  const sim3   = { sumR:r3,             pnl: oneR*r3,             equity: base + oneR*r3 };
-  const simAll = { sumR:r1+r2+r3,       pnl: oneR*(r1+r2+r3),     equity: base + oneR*(r1+r2+r3) };
-
-  const seq = trades.map(t=>netROf(t.result||'')).filter(v=>v!==0);
+  const sim1   = { sumR:r1,        pnl: oneR*r1,        equity: base + oneR*r1 };
+  const sim2   = { sumR:r2,        pnl: oneR*r2,        equity: base + oneR*r2 };
+  const sim3   = { sumR:r3,        pnl: oneR*r3,        equity: base + oneR*r3 };
+  const simAll = { sumR:rsumTotal, pnl: oneR*rsumTotal, equity: base + oneR*rsumTotal };
 
   let curW=0,curL=0,maxW=0,maxL=0;
   for (const v of seq){
@@ -752,14 +746,14 @@ function computeStats(trades){
     total: trades.length,
     prob: { tp1:pct(n1,nDone), tp2:pct(n2,nDone), tp3:pct(n3,nDone) },
     rsum: { r1, r2, r3 },
-    rsumTotal: rnet,
-    rsumComponentsTotal: r1 + r2 + r3,
+    rsumTotal,
+    rsumComponentsTotal: rsumTotal,
     range: { min:minDate, max:maxDate },
     results: { counts: resultCounts, cumulative: cumulativeWin, wins, losses },
     sim: {
       base, risk, oneR,
-      pnl: oneR*rnet,
-      equity: base + oneR*rnet,
+      pnl: oneR*rsumTotal,
+      equity: base + oneR*rsumTotal,
       scenarios: { rr1:sim1, rr2:sim2, rr3:sim3, combined:simAll }
     },
     streak: {
@@ -919,84 +913,10 @@ exportHtmlBtn?.addEventListener('click', () => {
   }
 });
 
-/* =====================================================
-   IMAGE HELPERS (Before/After) + Lightbox
-   ===================================================== */
-function fileToDataURL(file){
-  return new Promise((res, rej)=>{
-    const fr = new FileReader();
-    fr.onload = () => res(fr.result);
-    fr.onerror = rej;
-    fr.readAsDataURL(file);
-  });
-}
-function validImageFile(file){
-  const okType = /^image\/(png|jpe?g|webp)$/i.test(file.type);
-  const okSize = file.size <= 3 * 1024 * 1024; // ≤ ~3MB
-  return okType && okSize;
-}
-function setImagePreview(which, dataURL){
-  const isBefore = which==='before';
-  const img    = isBefore ? editImgBeforePreview : editImgAfterPreview;
-  const hidden = isBefore ? editImgBeforeData    : editImgAfterData;
-  const btnClr = isBefore ? btnClearImgBefore    : btnClearImgAfter;
-  const btnView= isBefore ? btnViewImgBefore     : btnViewImgAfter;
-
-  hidden.value = dataURL || '';
-  if (dataURL){
-    img.src = dataURL; img.classList.remove('hidden');
-    btnClr?.classList.remove('hidden');
-    btnView?.classList.remove('hidden');
-  } else {
-    img.src = ''; img.classList.add('hidden');
-    btnClr?.classList.add('hidden');
-    btnView?.classList.add('hidden');
-  }
-}
-async function handlePick(which, file){
-  if (!file) return;
-  if (!validImageFile(file)) { alert('File harus PNG/JPG/WEBP dan ≤ 3MB.'); return; }
-  const dataURL = await fileToDataURL(file);
-  setImagePreview(which, dataURL);
-}
-/* input change */
-editImgBefore?.addEventListener('change', e=> handlePick('before', e.target.files?.[0]));
-editImgAfter ?.addEventListener('change', e=> handlePick('after',  e.target.files?.[0]));
-
-/* drag-drop */
-function bindDroppable(labelEl, inputEl){
-  if (!labelEl || !inputEl) return;
-  ['dragenter','dragover'].forEach(ev=>{
-    labelEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); labelEl.classList.add('drop-active'); });
-  });
-  ['dragleave','drop'].forEach(ev=>{
-    labelEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); labelEl.classList.remove('drop-active'); });
-  });
-  labelEl.addEventListener('drop', async e=>{
-    const file = e.dataTransfer?.files?.[0]; if(!file) return;
-    inputEl.files = e.dataTransfer.files;
-    inputEl.dispatchEvent(new Event('change', { bubbles:true }));
-  });
-}
-bindDroppable(dropBefore, editImgBefore);
-bindDroppable(dropAfter,  editImgAfter);
-
-/* clear */
-btnClearImgBefore?.addEventListener('click', ()=> setImagePreview('before',''));
-btnClearImgAfter ?.addEventListener('click', ()=> setImagePreview('after',''));
-
-/* lightbox */
-function openViewer(src){ if(!src) return; imgViewerImg.src = src; imgViewer.classList.remove('hidden'); imgViewer.classList.add('flex'); }
-function closeViewer(){ imgViewer.classList.add('hidden'); imgViewer.classList.remove('flex'); imgViewerImg.src=''; }
-btnViewImgBefore?.addEventListener('click', ()=> openViewer(editImgBeforeData?.value));
-btnViewImgAfter ?.addEventListener('click', ()=> openViewer(editImgAfterData?.value));
-imgViewerClose?.addEventListener('click', closeViewer);
-imgViewer?.addEventListener('click', (e)=>{ if(e.target===imgViewer) closeViewer(); });
-
 /* ===== Init ===== */
 (function init(){
-  ensureSymbolDropdownForAdd();      // jadikan dropdown di form utama
-  ensureSymbolDropdownForEdit();     // siapkan dropdown di modal edit (kalau dom-nya sudah ada)
+  ensureSymbolDropdownForAdd();
+  ensureSymbolDropdownForEdit();
 
   const s = loadSettings();
   if(baseInput) baseInput.value = (s.base ?? '');
@@ -1004,7 +924,6 @@ imgViewer?.addEventListener('click', (e)=>{ if(e.target===imgViewer) closeViewer
   baseInput?.addEventListener('input', ()=> calcSim());
   riskInput?.addEventListener('input', ()=> calcSim());
 
-  // Terapkan format awal sesuai simbol (kalau sudah terisi)
   applyPriceFormatToAddForm();
 
   refresh();
