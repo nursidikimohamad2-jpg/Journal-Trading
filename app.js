@@ -1324,24 +1324,9 @@ function injectUrlBarUnder(areaEl, kind){
 }
 
 
-// Paste global: bisa menangkap gambar langsung (TradingView -> Salin gambar) atau link gambar
-window.addEventListener('paste', async (e) => {
-  const dt = e.clipboardData || window.clipboardData;
-  if (!dt) return;
-
-  // 1️⃣ Jika yang ditempel adalah gambar (hasil Ctrl+Shift+S di TradingView)
-  const items = dt.items || [];
-  for (const item of items) {
-    if (item.type && item.type.startsWith('image/')) {
-      const file = item.getAsFile?.();
-      if (file) {
-        const b64 = await fileToBase64(file); // gunakan fungsi yg sudah ada di app.js kamu
-        if (b64) setImagePreview(lastImgKind, b64);
-        e.preventDefault();
-        return;
-      }
-    }
-  }
+// inject URL bar bila ada drop zone
+injectUrlBarUnder(dropBefore, 'before');
+injectUrlBarUnder(dropAfter,  'after');
 
   // 2️⃣ Jika yang ditempel adalah teks URL gambar
   const t = dt.getData?.('text') || '';
