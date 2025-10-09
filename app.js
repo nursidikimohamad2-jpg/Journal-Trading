@@ -995,17 +995,18 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
   const loss = stats.results.counts.SL;
 
   const header = `
-   <div>
-  <h1>${projectName}</h1>
-  <div class="muted">Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'} • Disusun otomatis dari RR Journal</div>
-</div>
-<div class="cards">
-  <div class="card"><div class="k">Transaksi</div><div class="v">${fmt0(stats.total)}</div></div>
-  <div class="card"><div class="k">Win / Loss</div><div class="v">${fmt0(win)} / ${fmt0(loss)}</div></div>
-  <div class="card"><div class="k">ΣR (R1+R2+R3)</div><div class="v ${signClass(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div></div>
-  <div class="card"><div class="k">1R (USD)</div><div class="v">$${fmt(stats.sim.oneR)}</div></div>
-  <div class="card"><div class="k">P/L (USD)</div><div class="v ${signClass(stats.sim.pnl)}">$${fmt(stats.sim.pnl)}</div></div>
-</div>
+    <div>
+      <h1>${projectName}</h1>
+      <div class="muted">Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'} • Disusun otomatis dari RR Journal</div>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="k">Transaksi</div><div class="v">${fmt0(stats.total)}</div></div>
+      <div class="card"><div class="k">Win / Loss</div><div class="v">${fmt0(win)} / ${fmt0(loss)}</div></div>
+      <div class="card"><div class="k">Total R (Net)</div><div class="v ${signClass(stats.rsumTotal)}">${stats.rsumTotal}</div></div>
+      <div class="card"><div class="k">1R (USD)</div><div class="v">$${fmt(stats.sim.oneR)}</div></div>
+      <div class="card"><div class="k">P/L (USD)</div><div class="v ${signClass(stats.sim.pnl)}">$${fmt(stats.sim.pnl)}</div></div>
+    </div>
+  `;
 
   // running P/L & Equity
   const oneR = stats.sim.oneR;
@@ -1243,18 +1244,16 @@ function injectUrlBarUnder(areaEl, kind){
   const wrap = document.createElement('div');
   wrap.className = 'mt-2 flex gap-2';
  wrap.innerHTML = `
-  <input id="${id}" type="url"
-    placeholder="Tempel link gambar (https://… atau data:image/…)"
+  <input id="${id}" type="url" 
+    placeholder="Tempel link gambar (https://… atau data:image/…)" 
     class="w-full rounded-xl border border-slate-300 bg-white text-slate-900 
            px-3 py-2 text-sm placeholder-slate-500 
-           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-           dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700" />
-  <button type="button"
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+  <button type="button" 
     class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500">
     Muat
   </button>
 `;
-
 
   areaEl.insertAdjacentElement('afterend', wrap);
 
@@ -1273,50 +1272,17 @@ function injectUrlBarUnder(areaEl, kind){
 
   input.addEventListener('focus', ()=>{ lastImgKind = kind; });
 }
-// inject URL bar bila ada drop zone (bisa tetap di init atau di openEdit)
+
+// inject URL bar bila ada drop zone
 injectUrlBarUnder(dropBefore, 'before');
 injectUrlBarUnder(dropAfter,  'after');
 
-// Paste global: dukung gambar langsung & link gambar
-window.addEventListener('paste', async (e) => {
-  const dt = e.clipboardData || window.clipboardData;
-  if (!dt) return;
-
-  // 1️⃣ Jika yang ditempel adalah gambar (TradingView -> Salin gambar)
-  const items = dt.items || [];
-  for (const item of items) {
-    if (item.type && item.type.startsWith('image/')) {
-      const file = item.getAsFile?.();
-      if (file) {
-        const b64 = await fileToBase64(file);
-        if (b64) setImagePreview(lastImgKind, b64);
-        e.preventDefault();
-        return;
-      }
-    }
-  }
-
-  // 2️⃣ Jika fokus di kolom URL (auto load setelah ditempel)
-  const el = document.activeElement;
-  const isUrlInput = el && (el.id === 'editImgBeforeUrl' || el.id === 'editImgAfterUrl');
-  if (isUrlInput) {
-    setTimeout(async () => {
-      const url = (el.value || '').trim();
-      if (isLikelyImageURL(url)) {
-        const kind = el.id === 'editImgBeforeUrl' ? 'before' : 'after';
-        const b64 = await urlToBase64Smart(url);
-        if (b64) setImagePreview(kind, b64);
-      }
-    }, 0);
-    return;
-  }
-
-  // 3️⃣ Jika clipboard berisi teks URL gambar dan bukan di kolom URL
-  const text = dt.getData?.('text')?.trim() || '';
-  if (text && isLikelyImageURL(text)) {
-    const b64 = await urlToBase64Smart(text);
+// Global paste: jika ada URL gambar di clipboard, muat ke area terakhir yang aktif
+window.addEventListener('paste', async (e)=>{
+  const t = (e.clipboardData || window.clipboardData)?.getData?.('text') || '';
+  if (isLikelyImageURL(t)){
+    const b64 = await urlToBase64Smart(t.trim());
     if (b64) setImagePreview(lastImgKind, b64);
-    e.preventDefault();
   }
 });
 
@@ -1336,4 +1302,3 @@ window.addEventListener('paste', async (e) => {
   updateActiveProjectUI();
   calcSim();
 })();
-anda buat susunan judul2 dalam kode ini agar kedepan mudah untuk mencari fungsi yg di maksud
