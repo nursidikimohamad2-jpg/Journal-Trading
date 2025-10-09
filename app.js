@@ -996,17 +996,39 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
 
   const header = `
     <div>
-      <h1>${projectName}</h1>
-      <div class="muted">Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'} • Disusun otomatis dari RR Journal</div>
-    </div>
-    <div class="cards">
-      <div class="card"><div class="k">Transaksi</div><div class="v">${fmt0(stats.total)}</div></div>
-      <div class="card"><div class="k">Win / Loss</div><div class="v">${fmt0(win)} / ${fmt0(loss)}</div></div>
-      <div class="card"><div class="k">Total R (Net)</div><div class="v ${signClass(stats.rsumTotal)}">${stats.rsumTotal}</div></div>
-      <div class="card"><div class="k">1R (USD)</div><div class="v">$${fmt(stats.sim.oneR)}</div></div>
-      <div class="card"><div class="k">P/L (USD)</div><div class="v ${signClass(stats.sim.pnl)}">$${fmt(stats.sim.pnl)}</div></div>
-    </div>
-  `;
+     <h1>${projectName}</h1>
+<div class="muted">
+  Rentang: ${stats.range.min || '-'} — ${stats.range.max || '-'} • Disusun otomatis dari RR Journal
+</div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="k">Transaksi</div>
+    <div class="v">${fmt0(stats.total)}</div>
+  </div>
+
+  <div class="card">
+    <div class="k">Win / Loss</div>
+    <div class="v">${fmt0(win)} / ${fmt0(loss)}</div>
+  </div>
+
+  <div class="card">
+    <div class="k">ΣR (R1+R2+R3)</div>
+    <div class="v ${signClass(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
+  </div>
+
+  <div class="card">
+    <div class="k">1R (USD)</div>
+    <div class="v">$${fmt(stats.sim.oneR)}</div>
+  </div>
+
+  <div class="card">
+    <div class="k">P/L (USD)</div>
+    <div class="v ${signClass(stats.sim.pnl)}">$${fmt(stats.sim.pnl)}</div>
+  </div>
+</div>
+
 
   // running P/L & Equity
   const oneR = stats.sim.oneR;
