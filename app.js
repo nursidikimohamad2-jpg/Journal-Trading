@@ -858,7 +858,7 @@ h1{font-size:22px;margin:0 0 8px}
     <div class="muted">ΣR Komponen (R1+R2+R3)</div>
     <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
   </div>
-
+';
   <div class="card">
     <div class="muted">Akumulasi R</div>
     <div class="r-list">
