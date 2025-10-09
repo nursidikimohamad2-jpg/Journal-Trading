@@ -818,7 +818,7 @@ h1{font-size:22px;margin:0 0 8px}
   body{background:#fff;color:#000}
   .card{background:#fff;border-color:#ddd}
 }
-`;
+
   const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2});
   const sign = n => n>=0?'pos':'neg';
 
