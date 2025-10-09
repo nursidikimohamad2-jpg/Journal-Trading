@@ -1,5 +1,5 @@
 /* =========================
-   RR JOURNAL — APP.JS (UTUH + CLOSE DATE)
+   RR JOURNAL — APP.JS (UTUH)
    ========================= */
 
 /* ===== util DOM ===== */
@@ -34,7 +34,26 @@ const saveProjectNotes = $('#saveProjectNotes');
 const cancelSaveProject = $('#cancelSaveProject');
 const confirmSaveProject = $('#confirmSaveProject');
 
+/* ===== Edit Modal & Image Controls ===== */
 const editModal = $('#editModal'), editForm = $('#editForm'), editCancel = $('#editCancel');
+
+const editImgBefore = $('#editImgBefore');
+const editImgAfter  = $('#editImgAfter');
+const editImgBeforeData = $('#editImgBeforeData');
+const editImgAfterData  = $('#editImgAfterData');
+const editImgBeforePreview = $('#editImgBeforePreview');
+const editImgAfterPreview  = $('#editImgAfterPreview');
+const btnClearImgBefore = $('#btnClearImgBefore');
+const btnClearImgAfter  = $('#btnClearImgAfter');
+const btnViewImgBefore  = $('#btnViewImgBefore');
+const btnViewImgAfter   = $('#btnViewImgAfter');
+const dropBefore = $('#dropBefore');
+const dropAfter  = $('#dropAfter');
+
+/* ===== Lightbox ===== */
+const imgViewer = $('#imgViewer');
+const imgViewerImg = $('#imgViewerImg');
+const imgViewerClose = $('#imgViewerClose');
 
 /* ===== storage keys ===== */
 const STORE       = 'rr_journal_active_v1';
@@ -44,7 +63,7 @@ const ACTIVE_NAME_KEY = 'rr_active_project_name';
 const STORE_SETTINGS  = 'rr_journal_settings_v1'; // { base, risk }
 
 /* ===== storage helpers ===== */
-const load       = () => JSON.parse(localStorage.getItem(STORE) || '[]');
+const load       = () => { try { return JSON.parse(localStorage.getItem(STORE) || '[]'); } catch { return []; } };
 const save       = d  => localStorage.setItem(STORE, JSON.stringify(d));
 const loadProj   = () => { try { return JSON.parse(localStorage.getItem(STORE_PROJ) || '[]'); } catch { localStorage.removeItem(STORE_PROJ); return []; } };
 const saveProj   = p  => localStorage.setItem(STORE_PROJ, JSON.stringify(p));
@@ -71,29 +90,15 @@ const SYMBOLS = [
   "XAUUSD","XAGUSD","US100"
 ];
 
-function populateSelectOptions(selectEl, list){
-  const hadPlaceholder = selectEl.options.length && !selectEl.options[0].value;
-  selectEl.innerHTML = '';
-  if (hadPlaceholder){
-    const ph = document.createElement('option');
-    ph.value=''; ph.textContent='-- pilih symbol --'; ph.disabled=true; ph.selected=true;
-    selectEl.appendChild(ph);
-  }
-  for (const s of list){
-    const opt = document.createElement('option');
-    opt.value = s; opt.textContent = s;
-    selectEl.appendChild(opt);
-  }
-}
-
+/* Ganti input symbol → <select> pada form utama (tanpa edit index.html) */
 function ensureSymbolDropdownForAdd(){
   if (!form) return;
-  const old = form.querySelector('#symbol');
+  const old = form.querySelector('[name="symbol"]');
   if (!old) return;
-  if (old.tagName.toLowerCase() === 'select'){ populateSelectOptions(old, SYMBOLS); return; }
+  if (old.tagName.toLowerCase() === 'select') { populateSelectOptions(old, SYMBOLS); return; }
 
   const sel = document.createElement('select');
-  sel.id = old.id; sel.name = old.name || 'symbol';
+  sel.id = old.id || 'symbol'; sel.name = old.name || 'symbol';
   sel.className = old.className; sel.required = true;
 
   const ph = document.createElement('option');
@@ -101,16 +106,19 @@ function ensureSymbolDropdownForAdd(){
   sel.appendChild(ph);
 
   populateSelectOptions(sel, SYMBOLS);
+
   const val = (old.value || '').toUpperCase().replace(/[^A-Z]/g,'');
   if (val && SYMBOLS.includes(val)) sel.value = val;
 
   old.replaceWith(sel);
 }
+
+/* Ganti input symbol → <select> pada modal edit */
 function ensureSymbolDropdownForEdit(){
   if (!editForm) return;
   const old = editForm.querySelector('[name="symbol"]');
   if (!old) return;
-  if (old.tagName.toLowerCase() === 'select'){ populateSelectOptions(old, SYMBOLS); return; }
+  if (old.tagName.toLowerCase() === 'select') { populateSelectOptions(old, SYMBOLS); return; }
 
   const sel = document.createElement('select');
   sel.name = 'symbol'; sel.id = old.id || 'editSymbol';
@@ -127,17 +135,34 @@ function ensureSymbolDropdownForEdit(){
   old.replaceWith(sel);
 }
 
+function populateSelectOptions(selectEl, list){
+  selectEl.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value=''; ph.textContent='-- pilih symbol --'; ph.disabled=true; ph.selected=true;
+  selectEl.appendChild(ph);
+  for (const s of list){
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    selectEl.appendChild(opt);
+  }
+}
+
 /* =========================================================
    FAIR-FOREX — NORMALISASI & PRESISI
    ========================================================= */
-function normalizeSymbol(s){ return (s||'').toUpperCase().replace(/[^A-Z]/g,'').trim(); }
+function normalizeSymbol(s){
+  return (s||'').toUpperCase().replace(/[^A-Z]/g,'').trim();
+}
 function precisionForSymbol(symRaw){
   const s = normalizeSymbol(symRaw);
   if (!s) return 5;
+
+  // mapping khusus
   const MAP = { XAUUSD:2, XAGUSD:3, US100:1 };
   if (MAP[s] != null) return MAP[s];
-  if (s.endsWith('JPY')) return 3;
-  return 5;
+
+  if (s.endsWith('JPY')) return 3; // semua pair quote JPY
+  return 5;                        // mayor default
 }
 function stepForPrecision(p){ return Number(`1e-${p}`); }
 function roundTo(n, prec){ const f = Math.pow(10, prec); return Math.round(Number(n||0)*f)/f; }
@@ -163,29 +188,7 @@ function applyPriceFormatToEditForm(){
   if(editForm.stop_loss){   editForm.stop_loss.step   = step; editForm.stop_loss.placeholder   = ph; }
 }
 
-/* ===== Active Project Helpers ===== */
-function setActiveProject(id='', name=''){
-  localStorage.setItem(ACTIVE_ID_KEY, id || '');
-  localStorage.setItem(ACTIVE_NAME_KEY, name || '');
-  updateActiveProjectUI();
-}
-function getActiveProject(){
-  return {
-    id:   localStorage.getItem(ACTIVE_ID_KEY)   || '',
-    name: localStorage.getItem(ACTIVE_NAME_KEY) || ''
-  };
-}
-function updateActiveProjectUI(){
-  const { id, name } = getActiveProject();
-  if (id) {
-    saveToActiveBtn?.classList.remove('hidden');
-    if (saveToActiveBtn) saveToActiveBtn.textContent = `Simpan (${name})`;
-  } else {
-    saveToActiveBtn?.classList.add('hidden');
-  }
-}
-
-/* ===== PREVIEW (mengikuti presisi simbol) ===== */
+/* ===== preview (mengikuti presisi simbol) ===== */
 function calcPreview(entry, sl, side, _precFromSymbol){
   const ok = Number.isFinite(entry) && Number.isFinite(sl);
   const prec = (_precFromSymbol ?? precisionForSymbol(form?.symbol?.value || ''));
@@ -195,10 +198,13 @@ function calcPreview(entry, sl, side, _precFromSymbol){
     return;
   }
   const d = Math.abs(entry - sl);
+
   rPointEl.textContent = toFixedBy(roundTo(d, prec), prec);
+
   const tp1 = side==='LONG'? entry+d : entry-d;
   const tp2 = side==='LONG'? entry+2*d : entry-2*d;
   const tp3 = side==='LONG'? entry+3*d : entry-3*d;
+
   tp1El.textContent = toFixedBy(roundTo(tp1, prec), prec);
   tp2El.textContent = toFixedBy(roundTo(tp2, prec), prec);
   tp3El.textContent = toFixedBy(roundTo(tp3, prec), prec);
@@ -235,6 +241,10 @@ function rowHTML(t){
   const prec = precisionForSymbol(t.symbol);
   const fmt  = v => toFixedBy(Number(v), prec);
   const symbolClean = normalizeSymbol(t.symbol);
+
+  const hasAttach = !!(t.img_before_data || t.img_after_data);
+  const attachIcon = hasAttach ? `<span title="Ada lampiran" class="inline-block align-middle ml-1 text-xs">📎</span>` : '';
+
   const resultSel = `
     <select data-id="${t.id}" data-field="result"
       class="bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1">
@@ -244,6 +254,7 @@ function rowHTML(t){
       <option value="TP2"${t.result==='TP2'?'selected':''}>TP2</option>
       <option value="TP3"${t.result==='TP3'?'selected':''}>TP3</option>
     </select>`;
+
   const buttons = `
     <div class="flex items-center gap-2 justify-center">
       <button data-id="${t.id}" data-action="edit"
@@ -251,9 +262,10 @@ function rowHTML(t){
       <button data-id="${t.id}" data-action="del"
         class="bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1 hover:bg-rose-600 hover:text-white" title="Hapus">🗑</button>
     </div>`;
+
   return `
     <td class="px-3 py-2">${fmtDT(t.setup_date||'')}</td>
-    <td class="px-3 py-2">${symbolClean}</td>
+    <td class="px-3 py-2">${symbolClean}${attachIcon}</td>
     <td class="px-3 py-2 text-center">${t.side}</td>
     <td class="px-3 py-2 text-right">${fmt(t.entry_price)}</td>
     <td class="px-3 py-2 text-right">${fmt(t.stop_loss)}</td>
@@ -261,7 +273,6 @@ function rowHTML(t){
     <td class="px-3 py-2 text-right">${rCell(r2)}</td>
     <td class="px-3 py-2 text-right">${rCell(r3)}</td>
     <td class="px-3 py-2 text-right">${resultSel}</td>
-    <td class="px-3 py-2">${fmtDT(t.close_date||'')}</td>
     <td class="px-3 py-2 text-left">${t.note || ''}</td>
     <td class="px-3 py-2">${buttons}</td>
   `;
@@ -295,7 +306,7 @@ function refresh(){
   const pct = x => (nDone>0?Math.round(x/nDone*100):0)+'%';
   pBox1.textContent = pct(n1); pBox2.textContent = pct(n2); pBox3.textContent = pct(n3);
 
-  calcSim(rnet);
+  calcSim(); // update simulasi balance
 }
 
 /* ===== CRUD data ===== */
@@ -306,14 +317,20 @@ function deleteTrade(id){ save(load().filter(x=>x.id!==id)); }
 /* ===== edit modal ===== */
 function openEdit(id){
   const t = load().find(x=>x.id===id); if(!t) return;
+
   ensureSymbolDropdownForEdit();
+
   editForm.id.value = id;
   editForm.setup_date.value = toDTInput(t.setup_date || '');
   editForm.symbol.value = normalizeSymbol(t.symbol || '');
   editForm.side.value = t.side || 'LONG';
   editForm.entry_price.value = t.entry_price ?? 0;
   editForm.stop_loss.value  = t.stop_loss  ?? 0;
-  editForm.close_date.value = toDTInput(t.close_date || '');
+
+  // Lampiran gambar -> isi & preview
+  setImagePreview('before', t.img_before_data || '');
+  setImagePreview('after',  t.img_after_data  || '');
+
   applyPriceFormatToEditForm();
   editModal.classList.remove('hidden'); editModal.classList.add('flex');
 }
@@ -359,12 +376,18 @@ function openSaveProjectModal(){
 function closeSaveProjectModal(){ saveProjectModal.classList.add('hidden'); saveProjectModal.classList.remove('flex'); }
 
 /* ===== events: ADD FORM ===== */
-form?.addEventListener('input', ()=>{ applyPriceFormatToAddForm(); });
-form?.addEventListener('change', e=>{ if (e.target && e.target.id === 'symbol') applyPriceFormatToAddForm(); });
+form?.addEventListener('input', ()=>{
+  applyPriceFormatToAddForm();
+});
+form?.addEventListener('change', e=>{
+  if (e.target && e.target.name === 'symbol') applyPriceFormatToAddForm();
+});
 
-/* validasi + tambah row */
+/* validasi + tambah row  (TIDAK reset modal/risk) */
 form?.addEventListener('submit', e=>{
   e.preventDefault();
+
+  // simpan nilai modal/risk sekarang agar tidak ikut ke-reset
   const keepSettings = getSettings();
 
   const symbol = normalizeSymbol(form.symbol.value || '');
@@ -377,7 +400,10 @@ form?.addEventListener('submit', e=>{
     alert('Isi minimal: Symbol, Entry, dan Stop Loss dengan nilai yang valid.');
     return;
   }
-  if (entry === sl) { alert('Entry dan Stop Loss tidak boleh sama.'); return; }
+  if (entry === sl) {
+    alert('Entry dan Stop Loss tidak boleh sama.');
+    return;
+  }
 
   addTrade({
     id: uid(),
@@ -386,14 +412,19 @@ form?.addEventListener('submit', e=>{
     entry_price: roundTo(entry, prec),
     stop_loss:   roundTo(sl,   prec),
     setup_date: form.setup_date.value || '',
-    close_date: form.close_date?.value || '',
     note: form.note.value || '',
-    result: ''
+    result: '',
+    img_before_data: '', // default kosong
+    img_after_data : ''
   });
 
+  // reset hanya field trade
   form.reset();
+
+  // kembalikan modal/risk (project berjalan)
   setSettings(keepSettings);
-  calcSim();
+  calcSim(); // recompute 1R & P/L
+
   rPointEl.textContent = tp1El.textContent = tp2El.textContent = tp3El.textContent = '0.00';
   refresh();
 });
@@ -408,14 +439,7 @@ form?.addEventListener('reset', ()=>{
 tradeList.addEventListener('change', e=>{
   const sel = e.target.closest('select[data-id]');
   if(sel){
-    const id = sel.dataset.id;
-    const val = sel.value;
-    const patch = { [sel.dataset.field||'result']: val };
-    // atur close_date otomatis
-    const row = load().find(t=>t.id===id);
-    if (val && !row.close_date) patch.close_date = nowISO();
-    if (!val) patch.close_date = '';
-    updateTrade(id, patch);
+    updateTrade(sel.dataset.id, { [sel.dataset.field||'result']: sel.value });
     refresh();
   }
 });
@@ -433,21 +457,24 @@ editForm?.addEventListener('change', e=>{
 });
 editForm?.addEventListener('submit', e=>{
   e.preventDefault();
+
   const symbol = normalizeSymbol(editForm.symbol.value || '');
   const prec   = precisionForSymbol(symbol);
+
   updateTrade(editForm.id.value, {
     setup_date: editForm.setup_date.value || '',
-    close_date: editForm.close_date.value || '',
     symbol,
     side: editForm.side.value,
     entry_price: roundTo(Number(editForm.entry_price.value)||0, prec),
-    stop_loss:   roundTo(Number(editForm.stop_loss.value)||0,  prec)
+    stop_loss:   roundTo(Number(editForm.stop_loss.value)||0,  prec),
+    img_before_data: (editImgBeforeData?.value || ''),
+    img_after_data : (editImgAfterData?.value  || '')
   });
   closeEdit(); refresh();
 });
 
 document.addEventListener('keydown', e=>{
-  if(e.key==='Escape'){ closeEdit(); closeProjectsModal(); closeSaveProjectModal(); }
+  if(e.key==='Escape'){ closeEdit(); closeProjectsModal(); closeSaveProjectModal(); closeViewer(); }
 });
 
 /* ===== Export/Import/Clear ===== */
@@ -476,10 +503,17 @@ cancelSaveProject?.addEventListener('click', closeSaveProjectModal);
 
 confirmSaveProject?.addEventListener('click', ()=>{
   const trades = load();
-  if (!trades.length) { alert('Belum ada data jurnal untuk disimpan.'); return; }
+  if (!trades.length) {
+    alert('Belum ada data jurnal untuk disimpan.');
+    return;
+  }
 
   const name = (saveProjectName.value||'').trim();
-  if (!name) { alert('Nama Project wajib diisi.'); saveProjectName.focus(); return; }
+  if (!name) {
+    alert('Nama Project wajib diisi.');
+    saveProjectName.focus();
+    return;
+  }
 
   const notes = (saveProjectNotes.value||'').trim();
   const projects = loadProj();
@@ -510,7 +544,7 @@ confirmSaveProject?.addEventListener('click', ()=>{
   save([]);       // kosongkan jurnal aktif
   refresh();
   closeSaveProjectModal();
-  openProjects();
+  openProjects(); // tampilkan daftar setelah simpan
 });
 
 /* buka/tutup modal projects */
@@ -536,20 +570,57 @@ projectsList?.addEventListener('click', e=>{
   }
 });
 
+/* ===== Active Project Helpers ===== */
+function setActiveProject(id='', name=''){
+  localStorage.setItem(ACTIVE_ID_KEY, id || '');
+  localStorage.setItem(ACTIVE_NAME_KEY, name || '');
+  updateActiveProjectUI();
+}
+function getActiveProject(){
+  return {
+    id:   localStorage.getItem(ACTIVE_ID_KEY)   || '',
+    name: localStorage.getItem(ACTIVE_NAME_KEY) || ''
+  };
+}
+function updateActiveProjectUI(){
+  const { id, name } = getActiveProject();
+  if (id) {
+    saveToActiveBtn?.classList.remove('hidden');
+    if (saveToActiveBtn) saveToActiveBtn.textContent = `Simpan (${name})`;
+  } else {
+    saveToActiveBtn?.classList.add('hidden');
+  }
+}
+
 /* ===== Simulasi Balance ===== */
-function getSettings(){ return { base: parseFloat(baseInput?.value) || 0, risk: parseFloat(riskInput?.value) || 0 }; }
-function setSettings({base=0, risk=0}={}){ if(baseInput) baseInput.value = (base ?? ''); if(riskInput) riskInput.value = (risk ?? ''); saveSettings({base, risk}); }
-function currentOneR(){ const s = getSettings(); return s.base * (s.risk/100); }
+function getSettings(){
+  return {
+    base: parseFloat(baseInput?.value) || 0,
+    risk: parseFloat(riskInput?.value) || 0
+  };
+}
+function setSettings({base=0, risk=0}={}){
+  if(baseInput) baseInput.value = (base ?? '');
+  if(riskInput) riskInput.value = (risk ?? '');
+  saveSettings({base, risk});
+}
+function currentOneR(){
+  const s = getSettings();
+  return s.base * (s.risk/100);
+}
 function calcSim(){
   const s = getSettings();
   saveSettings(s);
+
   const oneR = currentOneR();
   const rTotal = load().reduce((acc,t)=>{ const [x1,x2,x3]=rByResult((t.result||'')); return acc + x1 + x2 + x3; }, 0);
   const pnl  = oneR * rTotal;
   const eq   = s.base + pnl;
+
   if(rValBox)     rValBox.textContent     = fmtMoney(oneR);
   if(pnlMoneyBox) pnlMoneyBox.textContent = (pnl>=0? '+' : '') + fmtMoney(pnl);
   if(simBalBox)   simBalBox.textContent   = fmtMoney(eq);
+
   [pnlMoneyBox, simBalBox].forEach(el=>{
     if(!el) return;
     el.classList.remove('text-emerald-400','text-rose-400');
@@ -558,18 +629,24 @@ function calcSim(){
   });
 }
 
-/* ===== Apply URL params ===== */
+/* ===== Apply URL params ke form & preview ===== */
 (function applyURLParams(){
   if (!window.URLSearchParams || !form) return;
   const q = new URLSearchParams(location.search);
-  const set = (name, conv = v => v) => { if (q.has(name) && form[name] !== undefined) form[name].value = conv(q.get(name)); };
+
+  const set = (name, conv = v => v) => {
+    if (q.has(name) && form[name] !== undefined) {
+      form[name].value = conv(q.get(name));
+    }
+  };
+
   set('symbol', v => v || '');
   set('side', v => (v==='SHORT'?'SHORT':'LONG'));
   set('setup_date', v => v || '');
-  set('close_date', v => v || '');
   set('entry_price', v => v || '');
   set('stop_loss', v => v || '');
   set('note', v => v || '');
+
   ensureSymbolDropdownForAdd();
   applyPriceFormatToAddForm();
 })();
@@ -581,9 +658,13 @@ function calcSim(){
 function downloadTextFile(filename, text, mime = 'text/html') {
   try {
     const blob = new Blob([text], { type: mime });
-    if (window.navigator && window.navigator.msSaveOrOpenBlob) { window.navigator.msSaveOrOpenBlob(blob, filename); return; }
+    if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+      window.navigator.msSaveOrOpenBlob(blob, filename);
+      return;
+    }
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename;
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
     document.body.appendChild(a);
     a.click();
     setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },0);
@@ -597,12 +678,11 @@ function downloadTextFile(filename, text, mime = 'text/html') {
 function computeStats(trades){
   let nDone=0,n1=0,n2=0,n3=0;
   let r1=0,r2=0,r3=0,rnet=0;
-  const dates=[];  // kumpulkan open & close utk rentang
+  const dates=[];
   const resultCounts = { SL:0, TP1:0, TP2:0, TP3:0 };
 
   for (const t of trades){
     if (t.setup_date) dates.push(t.setup_date);
-    if (t.close_date) dates.push(t.close_date);
 
     const res = t.result || '';
     const [x1,x2,x3] = rByResult(res);
@@ -692,10 +772,10 @@ function computeStats(trades){
   };
 }
 
-/* ===== template laporan HTML (tetap, rentang pakai open/close) ===== */
+/* ===== template laporan HTML ===== */
 function buildReportHTML({ projectName, createdAt, stats }) {
   const css = `
-  :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--mut:#94a3b8;--pos:#10b981;--neg:#f43f5e}
+  :root{--bg:#0b1220;--panel:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--pos:#10b981;--neg:#f43f5e}
   *{box-sizing:border-box}
   body{margin:0;background:linear-gradient(#0b1220,#0a1020);color:var(--text);font:14px/1.45 system-ui,Inter,Segoe UI,Roboto}
   .wrap{max-width:1024px;margin:0 auto;padding:24px}
@@ -727,6 +807,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="muted">Dibuat: ${createdAt} • Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'}</div>
     </div>
 
+    <!-- Probabilitas -->
     <div class="grid g-4" style="margin-bottom:12px">
       <div class="card"><div class="muted">Jumlah Transaksi</div><div class="big">${stats.total}</div></div>
       <div class="card"><div class="muted">Prob ≥ TP1</div><div class="row"><div class="big">${stats.prob.tp1}%</div><div class="bar"><i style="width:${stats.prob.tp1}%"></i></div></div></div>
@@ -734,10 +815,18 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card"><div class="muted">Prob ≥ TP3</div><div class="row"><div class="big">${stats.prob.tp3}%</div><div class="bar"><i style="width:${stats.prob.tp3}%"></i></div></div></div>
     </div>
 
+    <!-- Ringkasan R -->
     <div class="grid g-4" style="margin-bottom:12px">
-      <div class="card"><div class="muted">Total R (Final/Net)</div><div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div></div>
-      <div class="card"><div class="muted">ΣR Komponen (R1+R2+R3)</div><div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div></div>
-      <div class="card"><div class="muted">Akumulasi R</div>
+      <div class="card">
+        <div class="muted">Total R (Final/Net)</div>
+        <div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div>
+      </div>
+      <div class="card">
+        <div class="muted">ΣR Komponen (R1+R2+R3)</div>
+        <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
+      </div>
+      <div class="card">
+        <div class="muted">Akumulasi R</div>
         <div class="r-list">
           <div>R1: <b class="${sign(stats.rsum.r1)}">${stats.rsum.r1}</b></div>
           <div>R2: <b class="${sign(stats.rsum.r2)}">${stats.rsum.r2}</b></div>
@@ -751,6 +840,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       </div>
     </div>
 
+    <!-- Skenario -->
     <div class="grid g-4" style="margin-bottom:12px">
       ${['rr1','rr2','rr3','combined'].map(k=>{
         const label={rr1:'TP1',rr2:'TP2',rr3:'TP3',combined:'Semua R'}[k];
@@ -764,28 +854,41 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       }).join('')}
     </div>
 
+    <!-- Hasil per Kategori + Risiko -->
     <div class="grid g-4">
       <div class="card">
         <div class="muted">Win (kumulatif ≥ TP)</div>
         <div class="r-list">
-          <div>≥ TP1: <b class="pos">${stats.results.cumulative.ge_tp1}</b> <span class="muted" style="font-size:12px"> (exact TP1: ${stats.results.counts.TP1})</span></div>
-          <div>≥ TP2: <b class="pos">${stats.results.cumulative.ge_tp2}</b> <span class="muted" style="font-size:12px"> (exact TP2: ${stats.results.counts.TP2})</span></div>
-          <div>≥ TP3: <b class="pos">${stats.results.cumulative.ge_tp3}</b> <span class="muted" style="font-size:12px"> (exact TP3: ${stats.results.counts.TP3})</span></div>
+          <div>≥ TP1: <b class="pos">${stats.results.cumulative.ge_tp1}</b>
+            <span class="muted" style="font-size:12px"> (exact TP1: ${stats.results.counts.TP1})</span>
+          </div>
+          <div>≥ TP2: <b class="pos">${stats.results.cumulative.ge_tp2}</b>
+            <span class="muted" style="font-size:12px"> (exact TP2: ${stats.results.counts.TP2})</span>
+          </div>
+          <div>≥ TP3: <b class="pos">${stats.results.cumulative.ge_tp3}</b>
+            <span class="muted" style="font-size:12px"> (exact TP3: ${stats.results.counts.TP3})</span>
+          </div>
           <div>Total Win: <b class="pos">${stats.results.wins}</b></div>
+          <div class="muted">Win Streak: <b>${stats.streak.maxConsecWin}</b></div>
         </div>
       </div>
+
       <div class="card">
         <div class="muted">Loss</div>
         <div class="r-list">
           <div>SL: <b class="neg">${stats.results.counts.SL}</b></div>
           <div>Total Loss: <b class="neg">${stats.results.losses}</b></div>
+          <div class="muted">Loss Streak: <b class="${stats.streak.maxConsecLoss>0?'neg':''}">${stats.streak.maxConsecLoss}</b></div>
         </div>
       </div>
-      <div class="card"><div class="muted">Consec. Profit (maks)</div>
+
+      <div class="card">
+        <div class="muted">Consec. Profit (maks)</div>
         <div><b class="pos">$${fmt(stats.streak.maxConsecProfitUSD)}</b></div>
         <div><b class="pos">${stats.streak.maxConsecProfitR}R</b></div>
       </div>
-      <div class="card"><div class="muted">Max Drawdown</div>
+      <div class="card">
+        <div class="muted">Max Drawdown</div>
         <div><b class="neg">$${fmt(stats.drawdown.maxAbs)}</b></div>
         <div><b class="neg">${stats.drawdown.maxPct}%</b></div>
       </div>
@@ -801,8 +904,13 @@ exportHtmlBtn?.addEventListener('click', () => {
     const trades=load();
     const {name:activeName}=getActiveProject();
     const projectName=activeName||'Jurnal Aktif';
+
     const stats=computeStats(trades);
-    const html=buildReportHTML({ projectName, createdAt:new Date().toLocaleString('id-ID'), stats });
+    const html=buildReportHTML({
+      projectName,
+      createdAt:new Date().toLocaleString('id-ID'),
+      stats
+    });
     const fname=`rr-report-${slugify(projectName)}.html`;
     downloadTextFile(fname,html,'text/html');
   } catch (e) {
@@ -811,16 +919,94 @@ exportHtmlBtn?.addEventListener('click', () => {
   }
 });
 
+/* =====================================================
+   IMAGE HELPERS (Before/After) + Lightbox
+   ===================================================== */
+function fileToDataURL(file){
+  return new Promise((res, rej)=>{
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+}
+function validImageFile(file){
+  const okType = /^image\/(png|jpe?g|webp)$/i.test(file.type);
+  const okSize = file.size <= 3 * 1024 * 1024; // ≤ ~3MB
+  return okType && okSize;
+}
+function setImagePreview(which, dataURL){
+  const isBefore = which==='before';
+  const img    = isBefore ? editImgBeforePreview : editImgAfterPreview;
+  const hidden = isBefore ? editImgBeforeData    : editImgAfterData;
+  const btnClr = isBefore ? btnClearImgBefore    : btnClearImgAfter;
+  const btnView= isBefore ? btnViewImgBefore     : btnViewImgAfter;
+
+  hidden.value = dataURL || '';
+  if (dataURL){
+    img.src = dataURL; img.classList.remove('hidden');
+    btnClr?.classList.remove('hidden');
+    btnView?.classList.remove('hidden');
+  } else {
+    img.src = ''; img.classList.add('hidden');
+    btnClr?.classList.add('hidden');
+    btnView?.classList.add('hidden');
+  }
+}
+async function handlePick(which, file){
+  if (!file) return;
+  if (!validImageFile(file)) { alert('File harus PNG/JPG/WEBP dan ≤ 3MB.'); return; }
+  const dataURL = await fileToDataURL(file);
+  setImagePreview(which, dataURL);
+}
+/* input change */
+editImgBefore?.addEventListener('change', e=> handlePick('before', e.target.files?.[0]));
+editImgAfter ?.addEventListener('change', e=> handlePick('after',  e.target.files?.[0]));
+
+/* drag-drop */
+function bindDroppable(labelEl, inputEl){
+  if (!labelEl || !inputEl) return;
+  ['dragenter','dragover'].forEach(ev=>{
+    labelEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); labelEl.classList.add('drop-active'); });
+  });
+  ['dragleave','drop'].forEach(ev=>{
+    labelEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); labelEl.classList.remove('drop-active'); });
+  });
+  labelEl.addEventListener('drop', async e=>{
+    const file = e.dataTransfer?.files?.[0]; if(!file) return;
+    inputEl.files = e.dataTransfer.files;
+    inputEl.dispatchEvent(new Event('change', { bubbles:true }));
+  });
+}
+bindDroppable(dropBefore, editImgBefore);
+bindDroppable(dropAfter,  editImgAfter);
+
+/* clear */
+btnClearImgBefore?.addEventListener('click', ()=> setImagePreview('before',''));
+btnClearImgAfter ?.addEventListener('click', ()=> setImagePreview('after',''));
+
+/* lightbox */
+function openViewer(src){ if(!src) return; imgViewerImg.src = src; imgViewer.classList.remove('hidden'); imgViewer.classList.add('flex'); }
+function closeViewer(){ imgViewer.classList.add('hidden'); imgViewer.classList.remove('flex'); imgViewerImg.src=''; }
+btnViewImgBefore?.addEventListener('click', ()=> openViewer(editImgBeforeData?.value));
+btnViewImgAfter ?.addEventListener('click', ()=> openViewer(editImgAfterData?.value));
+imgViewerClose?.addEventListener('click', closeViewer);
+imgViewer?.addEventListener('click', (e)=>{ if(e.target===imgViewer) closeViewer(); });
+
 /* ===== Init ===== */
 (function init(){
-  ensureSymbolDropdownForAdd();
-  ensureSymbolDropdownForEdit();
+  ensureSymbolDropdownForAdd();      // jadikan dropdown di form utama
+  ensureSymbolDropdownForEdit();     // siapkan dropdown di modal edit (kalau dom-nya sudah ada)
+
   const s = loadSettings();
   if(baseInput) baseInput.value = (s.base ?? '');
   if(riskInput) riskInput.value = (s.risk ?? '');
   baseInput?.addEventListener('input', ()=> calcSim());
   riskInput?.addEventListener('input', ()=> calcSim());
+
+  // Terapkan format awal sesuai simbol (kalau sudah terisi)
   applyPriceFormatToAddForm();
+
   refresh();
   updateActiveProjectUI();
   calcSim();
