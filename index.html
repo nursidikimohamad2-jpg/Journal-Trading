@@ -8,6 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body{font-family:Inter,ui-sans-serif,system-ui}
+    /* hilangkan spin input number */
     input[type=number]::-webkit-outer-spin-button,
     input[type=number]::-webkit-inner-spin-button{ -webkit-appearance: none; margin:0 }
     input[type=number]{ -moz-appearance:textfield }
@@ -24,7 +25,7 @@
       <form id="tradeForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label class="text-sm text-slate-400">Symbol</label>
-          <input id="symbol" name="symbol" placeholder="XAUUSD"
+          <input name="symbol" placeholder="XAUUSD"
                  class="w-full bg-slate-900/70 border border-slate-700 rounded-xl px-3 py-2 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500" />
         </div>
         <div>
@@ -35,7 +36,7 @@
           </select>
         </div>
         <div>
-          <label class="text-sm text-slate-400">Tanggal (Open)</label>
+          <label class="text-sm text-slate-400">Tanggal</label>
           <input type="datetime-local" name="setup_date"
                  class="w-full bg-slate-900/70 border border-slate-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500" />
         </div>
@@ -54,15 +55,6 @@
           <label class="text-sm text-slate-400">Catatan (opsional)</label>
           <input name="note" placeholder="setup/strategi"
                  class="w-full bg-slate-900/70 border border-slate-700 rounded-xl px-3 py-2 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500" />
-        </div>
-
-        <!-- NEW: tanggal close (opsional) -->
-        <div class="md:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label class="text-sm text-slate-400">Tanggal Close (opsional)</label>
-            <input type="datetime-local" name="close_date"
-                   class="w-full bg-slate-900/70 border border-slate-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500" />
-          </div>
         </div>
 
         <!-- preview harga -->
@@ -144,11 +136,13 @@
     <!-- ===== Daftar + Toolbar bawah ===== -->
     <section>
       <div class="flex flex-wrap items-center gap-2 mb-3">
+        <!-- Simpan langsung ke project aktif -->
         <button id="saveToActiveBtn"
                 class="bg-emerald-700/70 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl shadow hidden">
           Simpan (—)
         </button>
 
+        <!-- Simpan snapshot sebagai project baru / update -->
         <button id="saveProjectBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl shadow">
           Simpan Project
         </button>
@@ -179,7 +173,6 @@
               <th class="px-3 py-2">R2</th>
               <th class="px-3 py-2">R3</th>
               <th class="px-3 py-2">Hasil</th>
-              <th class="px-3 py-2">Closed</th>
               <th class="px-3 py-2 text-left">Catatan</th>
               <th class="px-3 py-2">Aksi</th>
             </tr>
@@ -201,13 +194,13 @@
 
   <!-- ===== Modal Edit ===== -->
   <div id="editModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
-    <div class="w-[min(720px,95vw)] rounded-2xl shadow-2xl ring-1 ring-slate-300 bg-gradient-to-br from-slate-200 to-slate-300 text-slate-900">
+    <div class="w-[min(620px,95vw)] rounded-2xl shadow-2xl ring-1 ring-slate-300 bg-gradient-to-br from-slate-200 to-slate-300 text-slate-900">
       <div class="p-6">
         <h3 class="text-lg font-semibold mb-4">Edit Trade</h3>
         <form id="editForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input type="hidden" name="id">
           <div class="md:col-span-2">
-            <label class="text-sm text-slate-600">Tanggal (Open)</label>
+            <label class="text-sm text-slate-600">Tanggal</label>
             <input name="setup_date" type="datetime-local"
                    class="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500" />
           </div>
@@ -231,12 +224,6 @@
           <div>
             <label class="text-sm text-slate-600">Stop Loss</label>
             <input name="stop_loss" type="number" step="0.0001"
-                   class="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500" />
-          </div>
-          <!-- NEW: close date -->
-          <div class="md:col-span-2">
-            <label class="text-sm text-slate-600">Tanggal Close</label>
-            <input name="close_date" type="datetime-local"
                    class="w-full bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500" />
           </div>
         </form>
