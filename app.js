@@ -504,86 +504,109 @@ function computeStats(trades){
   let r1=0,r2=0,r3=0,rnet=0;
   const dates=[];
 
-  // counter kategori
-  const counts = { tp1:0, tp2:0, tp3:0, sl:0 };
+  // exact hasil per kategori
+  const resultCounts = { SL:0, TP1:0, TP2:0, TP3:0 };
 
-  for(const t of trades){
-    if(t.setup_date) dates.push(t.setup_date);
-    const res=t.result||'';
-    const [x1,x2,x3]=rByResult(res);
-    r1+=x1; r2+=x2; r3+=x3;
-    rnet+=netROf(res);
+  for (const t of trades){
+    if (t.setup_date) dates.push(t.setup_date);
 
-    if(res==='TP1') counts.tp1++;
-    else if(res==='TP2') counts.tp2++;
-    else if(res==='TP3') counts.tp3++;
-    else if(res==='SL') counts.sl++;
+    const res = t.result || '';
+    const [x1,x2,x3] = rByResult(res);
+    r1 += x1; r2 += x2; r3 += x3;      // ΣR komponen
+    rnet += netROf(res);               // R final / net
 
-    const lvl=levelFromResult(res);
-    if(lvl!==null){nDone++;if(lvl>=1)n1++;if(lvl>=2)n2++;if(lvl>=3)n3++;}
+    const lvl = levelFromResult(res);
+    if (lvl !== null){ nDone++; if(lvl>=1)n1++; if(lvl>=2)n2++; if(lvl>=3)n3++; }
+
+    if (res==='SL')  resultCounts.SL++;
+    if (res==='TP1') resultCounts.TP1++;
+    if (res==='TP2') resultCounts.TP2++;
+    if (res==='TP3') resultCounts.TP3++;
   }
+
+  // kumulatif (≥TPn): TP3 dihitung juga untuk ≥TP2 & ≥TP1, TP2 dihitung juga untuk ≥TP1
+  const cumulativeWin = {
+    ge_tp1: resultCounts.TP1 + resultCounts.TP2 + resultCounts.TP3,
+    ge_tp2: resultCounts.TP2 + resultCounts.TP3,
+    ge_tp3: resultCounts.TP3
+  };
 
   const pct=(x,b)=>b>0?Math.round(x/b*100):0;
-  let minDate='',maxDate='';
-  if(dates.length){
-    const arr=dates.slice().sort();
-    minDate=(arr[0]||'').replace('T',' ');
-    maxDate=(arr[arr.length-1]||'').replace('T',' ');
+
+  // rentang tanggal
+  let minDate='', maxDate='';
+  if (dates.length){
+    const arr = dates.slice().sort();
+    minDate = (arr[0]||'').replace('T',' ');
+    maxDate = (arr[arr.length-1]||'').replace('T',' ');
   }
 
-  const {base,risk}=getSettings();
-  const oneR=base*(risk/100);
-  const pnl=oneR*rnet;
-  const eq=base+pnl;
+  // simulasi balance
+  const { base, risk } = getSettings();
+  const oneR = base * (risk/100);
 
-  const rTotalComponents=r1+r2+r3; // ΣR komponen
-  const sim1={sumR:r1,pnl:oneR*r1,equity:base+oneR*r1};
-  const sim2={sumR:r2,pnl:oneR*r2,equity:base+oneR*r2};
-  const sim3={sumR:r3,pnl:oneR*r3,equity:base+oneR*r3};
-  const simAll={sumR:rTotalComponents,pnl:oneR*rTotalComponents,equity:base+oneR*rTotalComponents};
+  const sim1   = { sumR:r1,             pnl: oneR*r1,             equity: base + oneR*r1 };
+  const sim2   = { sumR:r2,             pnl: oneR*r2,             equity: base + oneR*r2 };
+  const sim3   = { sumR:r3,             pnl: oneR*r3,             equity: base + oneR*r3 };
+  const simAll = { sumR:r1+r2+r3,       pnl: oneR*(r1+r2+r3),     equity: base + oneR*(r1+r2+r3) };
 
-  const seq=trades.map(t=>netROf(t.result||'')).filter(v=>v!==0);
+  // urutan hasil aktual → streak & DD
+  const seq = trades.map(t=>netROf(t.result||'')).filter(v=>v!==0);
+
   let curW=0,curL=0,maxW=0,maxL=0;
-  for(const v of seq){
-    if(v>0){curW++;if(curW>maxW)maxW=curW;curL=0;}
-    else if(v<0){curL++;if(curL>maxL)maxL=curL;curW=0;}
-    else{curW=0;curL=0;}
+  for (const v of seq){
+    if (v>0){ curW++; if(curW>maxW)maxW=curW; curL=0; }
+    else if (v<0){ curL++; if(curL>maxL)maxL=curL; curW=0; }
   }
 
-  let equityWalk=base,peak=base,maxDD=0,minEq=base,maxEq=base;
-  for(const v of seq){
-    equityWalk+=oneR*v;
-    if(equityWalk>peak)peak=equityWalk;
-    const dd=peak-equityWalk;
-    if(dd>maxDD)maxDD=dd;
-    if(equityWalk<minEq)minEq=equityWalk;
-    if(equityWalk>maxEq)maxEq=equityWalk;
+  let equity=base, peak=base, maxDD=0, minEq=base, maxEq=base;
+  for (const v of seq){
+    equity += oneR*v;
+    peak = Math.max(peak, equity);
+    maxDD = Math.max(maxDD, peak - equity);
+    minEq = Math.min(minEq, equity);
+    maxEq = Math.max(maxEq, equity);
   }
-  const ddPct=peak>0?+(maxDD/peak*100).toFixed(2):0;
+  const ddPct = peak>0 ? +(maxDD/peak*100).toFixed(2) : 0;
 
-  let curProfitR=0,maxProfitR=0;
-  for(const v of seq){
-    if(v>0){curProfitR+=v;if(curProfitR>maxProfitR)maxProfitR=curProfitR;}
-    else{curProfitR=0;}
+  let curProfitR=0, maxProfitR=0;
+  for (const v of seq){
+    if (v>0){ curProfitR += v; if(curProfitR>maxProfitR) maxProfitR=curProfitR; }
+    else { curProfitR=0; }
   }
-  const maxConsecProfitUSD=oneR*maxProfitR;
 
-  const wins = counts.tp1 + counts.tp2 + counts.tp3;
-  const losses = counts.sl;
+  const wins   = resultCounts.TP1 + resultCounts.TP2 + resultCounts.TP3;
+  const losses = resultCounts.SL;
 
   return {
     total: trades.length,
     prob: { tp1:pct(n1,nDone), tp2:pct(n2,nDone), tp3:pct(n3,nDone) },
     rsum: { r1, r2, r3 },
-    rsumTotal: rnet,                          // Total R = net
-    rsumComponentsTotal: rTotalComponents,    // ΣR
-    counts, wins, losses,                     // detail kategori
-    range: {min:minDate,max:maxDate},
-    sim:{base,risk,oneR,pnl,equity:eq,
-      scenarios:{rr1:sim1,rr2:sim2,rr3:sim3,combined:simAll}},
-    streak:{maxConsecWin:maxW,maxConsecLoss:maxL,
-      maxConsecProfitR:maxProfitR,maxConsecProfitUSD},
-    drawdown:{maxAbs:maxDD,maxPct:ddPct,minEquity:minEq,maxEquity:maxEq}
+    rsumTotal: rnet,                       // Total R (final/net)
+    rsumComponentsTotal: r1 + r2 + r3,     // ΣR komponen
+    range: { min:minDate, max:maxDate },
+
+    results: {
+      counts: resultCounts,                // exact
+      cumulative: cumulativeWin,           // kumulatif ≥TP
+      wins, losses
+    },
+
+    sim: {
+      base, risk, oneR,
+      pnl: oneR*rnet,
+      equity: base + oneR*rnet,
+      scenarios: { rr1:sim1, rr2:sim2, rr3:sim3, combined:simAll }
+    },
+
+    streak: {
+      maxConsecWin: maxW,
+      maxConsecLoss: maxL,
+      maxConsecProfitR: maxProfitR,
+      maxConsecProfitUSD: oneR*maxProfitR
+    },
+
+    drawdown: { maxAbs:maxDD, maxPct:ddPct, minEquity:minEq, maxEquity:maxEq }
   };
 }
 
