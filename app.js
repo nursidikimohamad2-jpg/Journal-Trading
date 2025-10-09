@@ -1028,7 +1028,7 @@ function buildPresentationHTML({ projectName, createdAt, trades, stats }){
     <div class="v ${signClass(stats.sim.pnl)}">$${fmt(stats.sim.pnl)}</div>
   </div>
 </div>
-
+`;
 
   // running P/L & Equity
   const oneR = stats.sim.oneR;
