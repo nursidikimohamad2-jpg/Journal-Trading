@@ -79,18 +79,68 @@ function updateActiveProjectUI(){
   }
 }
 
+/* =========================================================
+   FAIR-FOREX — NORMALISASI SIMBOL & PRESISI HARGA
+   ========================================================= */
+// Normalisasi: uppercase + buang spasi/pemisah (EUR/USD -> EURUSD, "gbp jpy" -> GBPJPY)
+function normalizeSymbol(s){
+  return (s||'').toUpperCase().replace(/[^A-Z]/g,'').trim();
+}
+// Presisi per simbol:
+// - XAU...  -> 2 desimal
+// - ...JPY  -> 3 desimal
+// - lainnya -> 5 desimal
+function precisionForSymbol(symRaw){
+  const s = normalizeSymbol(symRaw);
+  if (!s) return 5;
+  if (s.startsWith('XAU')) return 2;
+  if (s.endsWith('JPY'))   return 3;
+  return 5;
+}
+function stepForPrecision(p){ return Number(`1e-${p}`); }
+function roundTo(n, prec){ const f = Math.pow(10, prec); return Math.round(Number(n||0)*f)/f; }
+function toFixedBy(n, prec){ return Number.isFinite(n) ? Number(n).toFixed(prec) : (0).toFixed(prec); }
+
+// Terapkan step & placeholder sesuai simbol — FORM TAMBAH
+function applyPriceFormatToAddForm(){
+  if(!form) return;
+  const p = precisionForSymbol(form.symbol.value);
+  const step = stepForPrecision(p);
+  const ph = p>0 ? ('0.' + '0'.repeat(p)) : '0';
+  if(form.entry_price){ form.entry_price.step = step; form.entry_price.placeholder = ph; }
+  if(form.stop_loss){   form.stop_loss.step   = step; form.stop_loss.placeholder   = ph; }
+  // update preview agar mengikuti presisi saat ini
+  calcPreview(Number(form.entry_price.value), Number(form.stop_loss.value), form.side.value, p);
+}
+// Terapkan step & placeholder sesuai simbol — MODAL EDIT
+function applyPriceFormatToEditForm(){
+  if(!editForm) return;
+  const p = precisionForSymbol(editForm.symbol.value);
+  const step = stepForPrecision(p);
+  const ph = p>0 ? ('0.' + '0'.repeat(p)) : '0';
+  if(editForm.entry_price){ editForm.entry_price.step = step; editForm.entry_price.placeholder = ph; }
+  if(editForm.stop_loss){   editForm.stop_loss.step   = step; editForm.stop_loss.placeholder   = ph; }
+}
+
 /* ===== preview ===== */
-function calcPreview(entry, sl, side){
+function calcPreview(entry, sl, side, _precFromSymbol){
   const ok = Number.isFinite(entry) && Number.isFinite(sl);
-  if (!ok){ rPointEl.textContent='0.00'; tp1El.textContent=tp2El.textContent=tp3El.textContent='0.00'; return; }
+  const prec = (_precFromSymbol ?? precisionForSymbol(form?.symbol?.value || ''));
+  if (!ok){ 
+    rPointEl.textContent='0.00'; 
+    tp1El.textContent=tp2El.textContent=tp3El.textContent='0.00'; 
+    return; 
+  }
   const d = Math.abs(entry - sl);
-  rPointEl.textContent = d.toFixed(2);
+  rPointEl.textContent = toFixedBy(d, Math.max(2, prec));
+
   const tp1 = side==='LONG'? entry+d : entry-d;
   const tp2 = side==='LONG'? entry+2*d : entry-2*d;
   const tp3 = side==='LONG'? entry+3*d : entry-3*d;
-  tp1El.textContent = tp1.toFixed(2);
-  tp2El.textContent = tp2.toFixed(2);
-  tp3El.textContent = tp3.toFixed(2);
+
+  tp1El.textContent = toFixedBy(roundTo(tp1, prec), prec);
+  tp2El.textContent = toFixedBy(roundTo(tp2, prec), prec);
+  tp3El.textContent = toFixedBy(roundTo(tp3, prec), prec);
 }
 
 /* ===== R calc ===== */
@@ -121,6 +171,10 @@ function rCell(n){
 /* ===== table row ===== */
 function rowHTML(t){
   const [r1,r2,r3] = rByResult(t.result||'');
+  const prec = precisionForSymbol(t.symbol);
+  const fmt  = v => toFixedBy(Number(v), prec);
+  const symbolClean = normalizeSymbol(t.symbol);
+
   const resultSel = `
     <select data-id="${t.id}" data-field="result"
       class="bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1">
@@ -139,10 +193,10 @@ function rowHTML(t){
     </div>`;
   return `
     <td class="px-3 py-2">${fmtDT(t.setup_date||'')}</td>
-    <td class="px-3 py-2">${t.symbol}</td>
+    <td class="px-3 py-2">${symbolClean}</td>
     <td class="px-3 py-2 text-center">${t.side}</td>
-    <td class="px-3 py-2 text-right">${t.entry_price}</td>
-    <td class="px-3 py-2 text-right">${t.stop_loss}</td>
+    <td class="px-3 py-2 text-right">${fmt(t.entry_price)}</td>
+    <td class="px-3 py-2 text-right">${fmt(t.stop_loss)}</td>
     <td class="px-3 py-2 text-right">${rCell(r1)}</td>
     <td class="px-3 py-2 text-right">${rCell(r2)}</td>
     <td class="px-3 py-2 text-right">${rCell(r3)}</td>
@@ -194,10 +248,12 @@ function openEdit(id){
   const t = load().find(x=>x.id===id); if(!t) return;
   editForm.id.value = id;
   editForm.setup_date.value = toDTInput(t.setup_date || '');
-  editForm.symbol.value = t.symbol || '';
+  editForm.symbol.value = normalizeSymbol(t.symbol || '');
   editForm.side.value = t.side || 'LONG';
   editForm.entry_price.value = t.entry_price ?? 0;
   editForm.stop_loss.value  = t.stop_loss  ?? 0;
+
+  applyPriceFormatToEditForm();
   editModal.classList.remove('hidden'); editModal.classList.add('flex');
 }
 function closeEdit(){ editModal.classList.add('hidden'); editModal.classList.remove('flex'); }
@@ -243,8 +299,11 @@ function closeSaveProjectModal(){ saveProjectModal.classList.add('hidden'); save
 
 /* ===== events ===== */
 form?.addEventListener('input', ()=>{
-  calcPreview(Number(form.entry_price.value), Number(form.stop_loss.value), form.side.value);
+  // update step/placeholder kalau simbol berubah + hitung preview
+  applyPriceFormatToAddForm();
 });
+
+form?.symbol?.addEventListener('input', applyPriceFormatToAddForm);
 
 /* validasi + tambah row  (TIDAK reset modal/risk) */
 form?.addEventListener('submit', e=>{
@@ -253,16 +312,18 @@ form?.addEventListener('submit', e=>{
   // simpan nilai modal/risk sekarang agar tidak ikut ke-reset
   const keepSettings = getSettings();
 
-  const symbol = (form.symbol.value || '').trim();
-  const side   = form.side.value;
-  const entry  = Number(form.entry_price.value);
-  const sl     = Number(form.stop_loss.value);
+  const symbolRaw = (form.symbol.value || '').trim();
+  const symbol    = normalizeSymbol(symbolRaw);
+  const side      = form.side.value;
+  const entryRaw  = Number(form.entry_price.value);
+  const slRaw     = Number(form.stop_loss.value);
+  const prec      = precisionForSymbol(symbol);
 
-  if (!symbol || !Number.isFinite(entry) || !Number.isFinite(sl)) {
+  if (!symbol || !Number.isFinite(entryRaw) || !Number.isFinite(slRaw)) {
     alert('Isi minimal: Symbol, Entry, dan Stop Loss dengan nilai yang valid.');
     return;
   }
-  if (entry === sl) {
+  if (entryRaw === slRaw) {
     alert('Entry dan Stop Loss tidak boleh sama.');
     return;
   }
@@ -271,8 +332,8 @@ form?.addEventListener('submit', e=>{
     id: uid(),
     symbol,
     side,
-    entry_price: entry,
-    stop_loss: sl,
+    entry_price: roundTo(entryRaw, prec),
+    stop_loss:   roundTo(slRaw,  prec),
     setup_date: form.setup_date.value || '',
     note: form.note.value || '',
     result: ''
@@ -306,18 +367,23 @@ tradeList.addEventListener('click', e=>{
   if(btn.dataset.action==='edit'){ openEdit(id); }
 });
 
-editCancel.addEventListener('click', closeEdit);
+editCancel?.addEventListener('click', closeEdit);
 editForm?.addEventListener('submit', e=>{
   e.preventDefault();
+
+  const symbol = normalizeSymbol(editForm.symbol.value || '');
+  const prec   = precisionForSymbol(symbol);
+
   updateTrade(editForm.id.value, {
     setup_date: editForm.setup_date.value || '',
-    symbol: editForm.symbol.value || '',
+    symbol,
     side: editForm.side.value,
-    entry_price: Number(editForm.entry_price.value)||0,
-    stop_loss:  Number(editForm.stop_loss.value)||0
+    entry_price: roundTo(Number(editForm.entry_price.value)||0, prec),
+    stop_loss:   roundTo(Number(editForm.stop_loss.value)||0,  prec)
   });
   closeEdit(); refresh();
 });
+editForm?.symbol?.addEventListener('input', applyPriceFormatToEditForm);
 
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){ closeEdit(); closeProjectsModal(); closeSaveProjectModal(); }
@@ -510,12 +576,8 @@ function calcSim(_rnetFromRefresh){
   set('stop_loss', v => v || '');
   set('note', v => v || '');
 
-  // perbarui preview bila angka valid
-  const entry = Number(form.entry_price.value);
-  const sl    = Number(form.stop_loss.value);
-  if (Number.isFinite(entry) && Number.isFinite(sl) && form.side.value) {
-    calcPreview(entry, sl, form.side.value);
-  }
+  // perbarui preview + format harga jika ada nilai dari URL
+  applyPriceFormatToAddForm();
 })();
 
 /* =====================================================
