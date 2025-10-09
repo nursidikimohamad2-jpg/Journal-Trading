@@ -659,7 +659,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
         <div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div>
       </div>
       <div class="card">
-        <div class="muted">ΣR Komponen (R1+R2+R3)</div>
+        <div class="muted">R </div>
         <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
       </div>
       <div class="card">
@@ -693,13 +693,19 @@ function buildReportHTML({ projectName, createdAt, stats }) {
 
     <!-- Win/Loss detail + DD -->
     <div class="grid g-4">
-      <div class="card">
-        <div class="muted">Win (berdasarkan TP)</div>
+           <div class="card">
+        <div class="muted">Win (kumulatif ≥ TP)</div>
         <div class="r-list">
-          <div>TP1: <b class="pos">${stats.counts.tp1}</b></div>
-          <div>TP2: <b class="pos">${stats.counts.tp2}</b></div>
-          <div>TP3: <b class="pos">${stats.counts.tp3}</b></div>
-          <div>Total Win: <b class="pos">${stats.wins}</b></div>
+          <div>≥ TP1: <b class="pos">${stats.results.cumulative.ge_tp1}</b>
+            <span class="muted" style="font-size:12px"> (exact TP1: ${stats.results.counts.TP1})</span>
+          </div>
+          <div>≥ TP2: <b class="pos">${stats.results.cumulative.ge_tp2}</b>
+            <span class="muted" style="font-size:12px"> (exact TP2: ${stats.results.counts.TP2})</span>
+          </div>
+          <div>≥ TP3: <b class="pos">${stats.results.cumulative.ge_tp3}</b>
+            <span class="muted" style="font-size:12px"> (exact TP3: ${stats.results.counts.TP3})</span>
+          </div>
+          <div>Total Win: <b class="pos">${stats.results.wins}</b></div>
           <div class="muted">Win Streak: <b>${stats.streak.maxConsecWin}</b></div>
         </div>
       </div>
