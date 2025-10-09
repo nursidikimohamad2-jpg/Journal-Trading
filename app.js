@@ -786,15 +786,14 @@ body{
 /* kartu/box seragam */
 .card{
   background:rgba(15,23,42,.9);
-  border:1px solid var(--ring);
+  border:1px solid rgba(255,255,255,.08);
   border-radius:12px;
   padding:16px;
   display:flex;
   flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  text-align:center;
-  min-height:130px;
+  justify-content:space-between;
+  /* was: min-height:150px */
+  min-height:auto;            /* ← kartu jadi setinggi kontennya */
 }
 
 h1{font-size:22px;margin:0 0 8px}
@@ -853,12 +852,29 @@ h1{font-size:22px;margin:0 0 8px}
           <div>R3: <b class="${sign(stats.rsum.r3)}">${stats.rsum.r3}</b></div>
         </div>
       </div>
-      <div class="card">
-        <div class="muted">Simulasi Balance</div>
-        <div>Modal: <b>$${Number(stats.sim.base).toLocaleString('id-ID')}</b></div>
-        <div>Risk/trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmt(stats.sim.oneR)}</b></div>
-      </div>
+     <!-- Ringkasan Tengah (versi grid rapi) -->
+<div class="grid g-3" style="margin-bottom:12px">
+  <div class="card">
+    <div class="muted">ΣR Komponen (R1+R2+R3)</div>
+    <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
+  </div>
+
+  <div class="card">
+    <div class="muted">Akumulasi R</div>
+    <div class="r-list">
+      <div>R1: <b class="${sign(stats.rsum.r1)}">${stats.rsum.r1}</b></div>
+      <div>R2: <b class="${sign(stats.rsum.r2)}">${stats.rsum.r2}</b></div>
+      <div>R3: <b class="${sign(stats.rsum.r3)}">${stats.rsum.r3}</b></div>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="muted">Simulasi Balance</div>
+    <div>Modal: <b>$${Number(stats.sim.base).toLocaleString('id-ID')}</b></div>
+    <div>Risk/trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmt(stats.sim.oneR)}</b></div>
+  </div>
+</div>
+
 
     <div class="grid g-4" style="margin-bottom:12px">
       ${['rr1','rr2','rr3','combined'].map(k=>{
