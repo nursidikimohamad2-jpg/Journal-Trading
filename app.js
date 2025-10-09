@@ -800,11 +800,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card"><div class="muted">Prob ≥ TP3</div><div class="row"><div class="big">${stats.prob.tp3}%</div><div class="bar"><i style="width:${stats.prob.tp3}%"></i></div></div></div>
     </div>
 
-    <div class="grid g-4" style="margin-bottom:12px">
-      <div class="card">
-        <div class="muted">Total R (Final/Net)</div>
-        <div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div>
-      </div>
+    
       <div class="card">
         <div class="muted">ΣR Komponen (R1+R2+R3)</div>
         <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
