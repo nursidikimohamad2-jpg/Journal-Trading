@@ -1,3 +1,7 @@
+/* =========================
+   RR JOURNAL — APP.JS
+   ========================= */
+
 /* ===== util DOM ===== */
 const $ = q => document.querySelector(q);
 const uid = () => Math.random().toString(36).slice(2,9);
@@ -52,6 +56,7 @@ const fmtDT     = s => s ? s.replace('T',' ') : '';
 const toDTInput = s => !s ? '' : (s.includes('T') ? s : s.replace(' ', 'T'));
 const nowISO    = () => new Date().toISOString();
 const fmtMoney  = n => (isFinite(n) ? n.toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2}) : '0.00');
+const slugify   = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'report';
 
 function setActiveProject(id='', name=''){
   localStorage.setItem(ACTIVE_ID_KEY, id || '');
@@ -237,12 +242,12 @@ function openSaveProjectModal(){
 function closeSaveProjectModal(){ saveProjectModal.classList.add('hidden'); saveProjectModal.classList.remove('flex'); }
 
 /* ===== events ===== */
-form.addEventListener('input', ()=>{
+form?.addEventListener('input', ()=>{
   calcPreview(Number(form.entry_price.value), Number(form.stop_loss.value), form.side.value);
 });
 
 /* validasi + tambah row  (TIDAK reset modal/risk) */
-form.addEventListener('submit', e=>{
+form?.addEventListener('submit', e=>{
   e.preventDefault();
 
   // simpan nilai modal/risk sekarang agar tidak ikut ke-reset
@@ -285,7 +290,7 @@ form.addEventListener('submit', e=>{
 });
 
 /* tombol reset form -> jangan hapus modal/risk */
-form.addEventListener('reset', ()=>{
+form?.addEventListener('reset', ()=>{
   const s = loadSettings();
   setTimeout(()=>{ setSettings(s); calcSim(); }, 0);
 });
@@ -302,7 +307,7 @@ tradeList.addEventListener('click', e=>{
 });
 
 editCancel.addEventListener('click', closeEdit);
-editForm.addEventListener('submit', e=>{
+editForm?.addEventListener('submit', e=>{
   e.preventDefault();
   updateTrade(editForm.id.value, {
     setup_date: editForm.setup_date.value || '',
@@ -321,7 +326,10 @@ document.addEventListener('keydown', e=>{
 /* export/import/clear */
 exportBtn?.addEventListener('click', ()=>{
   const blob = new Blob([JSON.stringify(load(), null, 2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='rr-journal.json'; a.click(); URL.revokeObjectURL(a.href);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='rr-journal.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(a.href); },0);
 });
 importInput?.addEventListener('change', async e=>{
   const f = e.target.files[0]; if(!f) return;
@@ -484,19 +492,55 @@ function calcSim(_rnetFromRefresh){
   riskInput?.addEventListener('input', ()=> calcSim());
 })();
 
+/* ===== Apply URL params ke form & preview ===== */
+(function applyURLParams(){
+  if (!window.URLSearchParams || !form) return;
+  const q = new URLSearchParams(location.search);
+
+  const set = (name, conv = v => v) => {
+    if (q.has(name) && form[name] !== undefined) {
+      form[name].value = conv(q.get(name));
+    }
+  };
+
+  set('symbol', v => v || '');
+  set('side', v => (v==='SHORT'?'SHORT':'LONG'));
+  set('setup_date', v => v || '');
+  set('entry_price', v => v || '');
+  set('stop_loss', v => v || '');
+  set('note', v => v || '');
+
+  // perbarui preview bila angka valid
+  const entry = Number(form.entry_price.value);
+  const sl    = Number(form.stop_loss.value);
+  if (Number.isFinite(entry) && Number.isFinite(sl) && form.side.value) {
+    calcPreview(entry, sl, form.side.value);
+  }
+})();
+
 /* =====================================================
    EXPORT HTML (ringkasan + simulasi balance)
    ===================================================== */
 
 function downloadTextFile(filename, text, mime = 'text/html') {
-  const blob = new Blob([text], { type: mime });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  try {
+    const blob = new Blob([text], { type: mime });
+
+    if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+      window.navigator.msSaveOrOpenBlob(blob, filename);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },0);
+  } catch (err) {
+    console.error('Download failed:', err);
+    alert('Gagal membuat file export. Cek Console untuk detail error.');
+  }
 }
-function slugify(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'report'; }
 
 /* ===== hitung statistik + simulasi ===== */
 function computeStats(trades){
@@ -524,7 +568,7 @@ function computeStats(trades){
     if (res==='TP3') resultCounts.TP3++;
   }
 
-  // kumulatif (≥TPn): TP3 dihitung juga untuk ≥TP2 & ≥TP1, TP2 dihitung juga untuk ≥TP1
+  // kumulatif (≥TPn): TP3 dihitung juga untuk ≥TP2 & ≥TP1, TP2 juga untuk ≥TP1
   const cumulativeWin = {
     ge_tp1: resultCounts.TP1 + resultCounts.TP2 + resultCounts.TP3,
     ge_tp2: resultCounts.TP2 + resultCounts.TP3,
@@ -620,7 +664,8 @@ function buildReportHTML({ projectName, createdAt, stats }) {
   .grid{display:grid;gap:12px}
   .g-4{grid-template-columns:repeat(4,1fr);align-items:stretch}
   .card{background:rgba(15,23,42,.9);border:1px solid rgba(255,255,255,.08);border-radius:12px;
-        padding:16px;display:flex;flex-direction:column;justify-content:space-between}
+        padding:16px;display:flex;flex-direction:column;justify-content:space-between;min-height:150px}
+  h1{font-size:22px;margin:0 0 8px}
   .muted{color:var(--muted)} .big{font-size:22px;font-weight:700}
   .row{display:flex;gap:12px;align-items:center}
   .bar{height:8px;background:#0b7180;border-radius:2px;overflow:hidden;flex:1}
@@ -630,7 +675,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
   .r-list{display:flex;flex-direction:column;gap:6px;line-height:1.4}
   @media print{body{background:#fff;color:#000}.card{background:#fff;border-color:#ddd}}
   `;
-  const fmtMoney = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2});
+  const fmt = n => (+n).toLocaleString('id-ID',{minimumFractionDigits:2, maximumFractionDigits:2});
   const sign = n => n>=0?'pos':'neg';
 
   return `<!doctype html>
@@ -639,7 +684,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
   <title>Laporan — ${projectName}</title><style>${css}</style></head>
   <body><div class="wrap">
 
-    <div class="card" style="margin-bottom:12px;height:auto">
+    <div class="card" style="margin-bottom:12px;min-height:auto">
       <h1>${projectName}</h1>
       <div class="muted">Dibuat: ${createdAt} • Rentang: ${stats.range.min||'-'} — ${stats.range.max||'-'}</div>
     </div>
@@ -655,11 +700,11 @@ function buildReportHTML({ projectName, createdAt, stats }) {
     <!-- Ringkasan R -->
     <div class="grid g-4" style="margin-bottom:12px">
       <div class="card">
-        <div class="muted">Total R (Final / Net)</div>
+        <div class="muted">Total R (Final/Net)</div>
         <div class="big ${sign(stats.rsumTotal)}">${stats.rsumTotal}</div>
       </div>
       <div class="card">
-        <div class="muted">R </div>
+        <div class="muted">ΣR Komponen (R1+R2+R3)</div>
         <div class="big ${sign(stats.rsumComponentsTotal)}">${stats.rsumComponentsTotal}</div>
       </div>
       <div class="card">
@@ -673,7 +718,7 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card">
         <div class="muted">Simulasi Balance</div>
         <div>Modal: <b>$${Number(stats.sim.base).toLocaleString('id-ID')}</b></div>
-        <div>Risk/trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmtMoney(stats.sim.oneR)}</b></div>
+        <div>Risk/trade: <b>${(+stats.sim.risk).toFixed(2)}%</b> • 1R: <b>$${fmt(stats.sim.oneR)}</b></div>
       </div>
     </div>
 
@@ -684,16 +729,16 @@ function buildReportHTML({ projectName, createdAt, stats }) {
         const s=stats.sim.scenarios[k];
         return `<div class="card">
           <div class="muted">${label}</div>
-          <div>Equity: <b>$${fmtMoney(s.equity)}</b></div>
-          <div>P/L: <b class="${sign(s.pnl)}">$${fmtMoney(s.pnl)}</b></div>
+          <div>Equity: <b>$${fmt(s.equity)}</b></div>
+          <div>P/L: <b class="${sign(s.pnl)}">$${fmt(s.pnl)}</b></div>
           <div>ΣR: <b class="${sign(s.sumR)}">${s.sumR}</b></div>
         </div>`;
       }).join('')}
     </div>
 
-    <!-- Win/Loss detail + DD -->
+    <!-- Hasil per Kategori + Risiko -->
     <div class="grid g-4">
-           <div class="card">
+      <div class="card">
         <div class="muted">Win (kumulatif ≥ TP)</div>
         <div class="r-list">
           <div>≥ TP1: <b class="pos">${stats.results.cumulative.ge_tp1}</b>
@@ -713,20 +758,20 @@ function buildReportHTML({ projectName, createdAt, stats }) {
       <div class="card">
         <div class="muted">Loss</div>
         <div class="r-list">
-          <div>SL: <b class="neg">${stats.counts.sl}</b></div>
-          <div>Total Loss: <b class="neg">${stats.losses}</b></div>
+          <div>SL: <b class="neg">${stats.results.counts.SL}</b></div>
+          <div>Total Loss: <b class="neg">${stats.results.losses}</b></div>
           <div class="muted">Loss Streak: <b class="${stats.streak.maxConsecLoss>0?'neg':''}">${stats.streak.maxConsecLoss}</b></div>
         </div>
       </div>
 
       <div class="card">
         <div class="muted">Consec. Profit (maks)</div>
-        <div><b class="pos">$${fmtMoney(stats.streak.maxConsecProfitUSD)}</b></div>
+        <div><b class="pos">$${fmt(stats.streak.maxConsecProfitUSD)}</b></div>
         <div><b class="pos">${stats.streak.maxConsecProfitR}R</b></div>
       </div>
       <div class="card">
         <div class="muted">Max Drawdown</div>
-        <div><b class="neg">$${fmtMoney(stats.drawdown.maxAbs)}</b></div>
+        <div><b class="neg">$${fmt(stats.drawdown.maxAbs)}</b></div>
         <div><b class="neg">${stats.drawdown.maxPct}%</b></div>
       </div>
     </div>
@@ -736,18 +781,28 @@ function buildReportHTML({ projectName, createdAt, stats }) {
 }
 
 /* ===== handler tombol Export HTML ===== */
-exportHtmlBtn?.addEventListener('click', ()=>{
-  const trades=load();
-  const {name:activeName}=getActiveProject();
-  const projectName=activeName||'Jurnal Aktif';
-  const stats=computeStats(trades);
-  const html=buildReportHTML({
-    projectName,
-    createdAt:new Date().toLocaleString('id-ID'),
-    stats
-  });
-  const fname=`rr-report-${slugify(projectName)}.html`;
-  downloadTextFile(fname,html,'text/html');
+exportHtmlBtn?.addEventListener('click', () => {
+  try {
+    const trades=load();
+    const {name:activeName}=getActiveProject();
+    const projectName=activeName||'Jurnal Aktif';
+
+    if (typeof computeStats!=='function' || typeof buildReportHTML!=='function') {
+      throw new Error('computeStats atau buildReportHTML tidak ditemukan.');
+    }
+
+    const stats=computeStats(trades);
+    const html=buildReportHTML({
+      projectName,
+      createdAt:new Date().toLocaleString('id-ID'),
+      stats
+    });
+    const fname=`rr-report-${slugify(projectName)}.html`;
+    downloadTextFile(fname,html,'text/html');
+  } catch (e) {
+    console.error('Export HTML error:', e);
+    alert('Export HTML gagal: ' + (e?.message || e));
+  }
 });
 
 /* ===== init ===== */
